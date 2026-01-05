@@ -201,6 +201,19 @@ class Motor:
             vel = -vel
         return vel
 
+    @property
+    def wheel_velocity(self) -> float:
+        """Get logical wheel velocity for 3D simulation.
+
+        This returns what the wheel is doing from the robot's perspective,
+        not the physical motor shaft direction. The 'reversed' flag only
+        compensates for motor mounting and shouldn't affect the wheel direction.
+        """
+        vel = self._velocity
+        if self._direction == REVERSE:
+            vel = -vel
+        return vel
+
 
 # ============================================================
 # CONTROLLER CLASS

@@ -5,6 +5,7 @@ This guide explains how to use a USB gamepad (Xbox 360/One controller) with the 
 ## Overview
 
 WSL2 doesn't natively support USB devices. To use a gamepad, you need to:
+
 1. Install usbipd-win on Windows to share USB devices
 2. Build a custom WSL2 kernel with joystick drivers
 3. Attach the gamepad to WSL2
@@ -114,6 +115,7 @@ usbipd list
 ```
 
 Look for your Xbox controller. Example output:
+
 ```
 BUSID  VID:PID    DEVICE                          STATE
 1-9    045e:028e  Xbox 360 Controller for Windows Not shared
@@ -168,6 +170,7 @@ Move the sticks and press buttons - you should see values change.
 ### "Device not found" after attach
 
 The Windows Xbox driver may be holding the device. Try:
+
 1. Close any games or Xbox Game Bar
 2. Disconnect and reconnect the controller
 3. Run `usbipd attach` again
@@ -175,9 +178,11 @@ The Windows Xbox driver may be holding the device. Try:
 ### Joystick device not appearing
 
 1. Verify kernel has joystick support:
+
    ```bash
    zcat /proc/config.gz | grep JOYSTICK
    ```
+
    Should show `CONFIG_INPUT_JOYDEV=y`
 
 2. Check dmesg for errors:
@@ -188,6 +193,7 @@ The Windows Xbox driver may be holding the device. Try:
 ### Permission denied on /dev/input/js0
 
 Make sure you're in the input group:
+
 ```bash
 groups $USER
 ```
@@ -211,6 +217,7 @@ usbipd list                           # List USB devices
 usbipd bind --busid <ID>              # Share device (one-time)
 usbipd attach --wsl --busid <ID>      # Attach to WSL
 usbipd detach --busid <ID>            # Detach from WSL
+usbipd list | findstr -i "xbox game controller pad joystick 045e"
 ```
 
 ```bash
@@ -225,6 +232,7 @@ dmesg | tail -20                      # Check kernel messages
 You can create a script to quickly attach the gamepad:
 
 **Windows (attach-gamepad.ps1):**
+
 ```powershell
 usbipd attach --wsl --busid 1-9
 ```

@@ -2,16 +2,20 @@
 
 This document outlines the planned development phases for the VEX IQ Simulator. Contributions are welcome!
 
-## Current State (v0.1)
+## Current State (v0.2)
 
 - [x] Parse and execute `.iqpython` files
 - [x] Virtual controller with mouse support
-- [x] USB gamepad support (Xbox 360/One)
+- [x] USB gamepad support (Xbox 360/One, Windows & Linux)
 - [x] Motor visualization (velocity, direction)
 - [x] Pneumatic indicators (extend/retract)
 - [x] All 6 VEX IQ drive modes
 - [x] Button callbacks (pressed/released)
 - [x] WSL2 compatibility
+- [x] **3D field visualization with Ursina engine**
+- [x] **Robot movement in 3D world**
+- [x] **Autonomous code testing (no gamepad required)**
+- [x] **Cross-platform gamepad support (Windows/Linux)**
 
 ---
 
@@ -58,23 +62,25 @@ This document outlines the planned development phases for the VEX IQ Simulator. 
 
 ---
 
-## Phase 3: 3D World Simulation
+## Phase 3: 3D World Simulation ✓ (In Progress)
 
-### 3.1 3D Engine Integration
-- [ ] Evaluate engines: PyBullet, Panda3D, or Godot (Python bindings)
-- [ ] Basic 3D field rendering
-- [ ] Camera controls (orbit, pan, zoom)
-- [ ] Multiple view modes (isometric, first-person, top-down)
+### 3.1 3D Engine Integration ✓
+- [x] Evaluate engines: **Ursina (built on Panda3D)** selected
+- [x] Basic 3D field rendering (VEX IQ field with grid)
+- [x] Camera controls (toggle views with 'C' key)
+- [x] Multiple view modes (angled, overhead)
 
-### 3.2 Robot Visualization
-- [ ] Generic robot chassis model
-- [ ] Wheel animation based on motor velocity
+### 3.2 Robot Visualization (Partial)
+- [x] Generic robot chassis model (placeholder cube)
+- [x] Movement based on motor velocity
+- [ ] Wheel animation (visual spinning)
 - [ ] Arm/lift mechanism animation
 - [ ] Claw/intake visualization
 
 ### 3.3 Physics Engine
-- [ ] Rigid body physics for robot
-- [ ] Collision detection with field elements
+- [x] Basic movement physics (velocity, turning)
+- [x] Field boundary collision
+- [ ] Rigid body physics (PyBullet integration)
 - [ ] Game piece physics (balls, cubes rolling/stacking)
 - [ ] Friction and weight simulation
 
@@ -147,11 +153,12 @@ This document outlines the planned development phases for the VEX IQ Simulator. 
 | **Pygame + OpenGL** | Minimal dependencies | Manual 3D implementation |
 | **Three.js (web)** | Cross-platform, no install | Requires web architecture |
 
-### Recommended Approach
+### Current Implementation
 
-1. **Phase 2** - Use Pygame with 2D sprites (current stack)
-2. **Phase 3** - Integrate PyBullet for physics + Panda3D for rendering
-3. **Phase 4** - Build on Phase 3 with custom UI
+- **3D Rendering**: Ursina engine (Python-friendly wrapper around Panda3D)
+- **UI**: Ursina's built-in UI system with custom control panel
+- **Gamepad**: pygame for cross-platform controller support
+- **Next**: PyBullet for advanced physics simulation
 
 ### File Formats
 
@@ -193,11 +200,12 @@ pip install -r requirements-dev.txt  # For development tools
 
 | Version | Status | Features |
 |---------|--------|----------|
-| 0.1 | Current | Basic simulation, controller, motor/pneumatic viz |
-| 0.2 | Planned | Sensor simulation, timing improvements |
-| 0.3 | Planned | 2D field view, path visualization |
-| 1.0 | Planned | 3D world, basic physics |
-| 2.0 | Future | Robot designer, competition mode |
+| 0.1 | Released | Basic simulation, controller, motor/pneumatic viz |
+| 0.2 | **Current** | 3D field (Ursina), robot movement, Windows/Linux gamepad |
+| 0.3 | Planned | Sensor simulation, robot model improvements |
+| 0.4 | Planned | PyBullet physics, game pieces |
+| 1.0 | Planned | Full 3D physics, competition mode |
+| 2.0 | Future | Robot designer, multi-robot support |
 
 ---
 
