@@ -80,6 +80,8 @@ vexiq-simulator/
 │   ├── vex_stub.py          # VEX IQ API stub implementation
 │   ├── virtual_controller.py # PyGame GUI
 │   └── iqpython_parser.py   # .iqpython file parser
+├── docs/
+│   └── WSL2_GAMEPAD_SETUP.md # Detailed WSL2 gamepad guide
 ├── requirements.txt
 ├── LICENSE
 ├── README.md
@@ -96,12 +98,21 @@ vexiq-simulator/
 
 ## WSL2 Gamepad Support
 
-If running in WSL2, you may need to:
+If running in WSL2, USB gamepads require additional setup:
 
-1. Install usbipd-win on Windows
-2. Share the USB device: `usbipd bind --busid <BUS-ID>`
-3. Attach to WSL: `usbipd attach --wsl --busid <BUS-ID>`
-4. Build a custom WSL kernel with joystick support (CONFIG_JOYSTICK_XPAD)
+```powershell
+# Windows PowerShell (Admin)
+usbipd list                              # Find your controller's BUSID
+usbipd bind --busid <BUSID>              # Share device (one-time)
+usbipd attach --wsl --busid <BUSID>      # Attach to WSL
+```
+
+**Note:** The default WSL2 kernel lacks joystick drivers. You'll need to build a custom kernel.
+
+See **[WSL2 Gamepad Setup Guide](docs/WSL2_GAMEPAD_SETUP.md)** for complete instructions including:
+- Installing usbipd-win
+- Building a custom WSL2 kernel with Xbox controller support
+- Troubleshooting common issues
 
 ## Supported VEX IQ API
 
