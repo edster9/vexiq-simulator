@@ -71,3 +71,12 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+# 3D Models (large files, still being optimized)
+simulator/models/
+
+# Ursina model cache
+models_compressed/
+
+# Temporary CAD extraction
+/tmp/
