@@ -7,22 +7,147 @@ Ursina-based 3D world with VEX IQ field grid.
 from ursina import *
 
 
-class VexField(Entity):
-    """VEX IQ competition field - flat grid surface.
+class OrbitCamera:
+    """Orbit camera controller with zoom, rotate, and pan.
 
-    VEX IQ fields have a dark gray base with lighter grid lines,
-    similar to foam tile competition mats.
+    Controls:
+    - Scroll wheel: Zoom in/out
+    - Middle mouse + drag: Orbit/rotate around target
+    - Right mouse + drag: Pan
     """
 
-    # Standard VEX IQ field is 6x6 feet (1.83m x 1.83m)
-    FIELD_SIZE = 6  # feet
-    GRID_LINES = 6  # number of grid squares per side
+    def __init__(self):
+        # Camera distance from target (zoom level)
+        self.distance = 10
+        self.min_distance = 3
+        self.max_distance = 25
 
-    # VEX IQ field colors (use built-in colors - color.rgb() doesn't work)
-    FIELD_COLOR = color.dark_gray
-    GRID_COLOR = color.gray
-    BORDER_COLOR = color.smoke
-    ACCENT_COLOR = color.red
+        # Orbit angles
+        self.rotation_x = 50  # Pitch (up/down)
+        self.rotation_y = 0   # Yaw (left/right)
+        self.min_pitch = 10
+        self.max_pitch = 90
+
+        # Target point to orbit around
+        self.target = Vec3(0, 0, 0)
+
+        # Sensitivity
+        self.zoom_speed = 1.5
+        self.rotate_speed = 100
+        self.pan_speed = 0.01
+
+        # Mouse tracking
+        self._prev_mouse_pos = None
+
+        # Apply initial position
+        self.update_camera()
+
+    def update_camera(self):
+        """Update camera position based on orbit parameters."""
+        # Calculate position from spherical coordinates
+        rad_x = math.radians(self.rotation_x)
+        rad_y = math.radians(self.rotation_y)
+
+        # Position relative to target
+        x = self.distance * math.sin(rad_y) * math.cos(rad_x)
+        y = self.distance * math.sin(rad_x)
+        z = -self.distance * math.cos(rad_y) * math.cos(rad_x)
+
+        camera.position = self.target + Vec3(x, y, z)
+
+        # Look at target, then reset rotation_z to prevent roll/tilt
+        camera.look_at(self.target)
+        camera.rotation_z = 0  # Lock roll axis to keep horizon level
+
+    def handle_input(self, key):
+        """Handle keyboard input."""
+        # Scroll wheel zoom
+        if key == 'scroll up':
+            self.distance = max(self.min_distance, self.distance - self.zoom_speed)
+            self.update_camera()
+        elif key == 'scroll down':
+            self.distance = min(self.max_distance, self.distance + self.zoom_speed)
+            self.update_camera()
+
+    def update(self):
+        """Update camera each frame for mouse drag operations."""
+        # Get mouse delta
+        if self._prev_mouse_pos is None:
+            self._prev_mouse_pos = mouse.position
+            return
+
+        delta = mouse.position - self._prev_mouse_pos
+        self._prev_mouse_pos = mouse.position
+
+        # Middle mouse: Orbit/rotate
+        if mouse.middle:
+            self.rotation_y += delta.x * self.rotate_speed
+            self.rotation_x -= delta.y * self.rotate_speed
+            # Clamp pitch
+            self.rotation_x = max(self.min_pitch, min(self.max_pitch, self.rotation_x))
+            self.update_camera()
+
+        # Right mouse: Pan
+        elif mouse.right:
+            # Calculate pan direction based on camera orientation
+            right = Vec3(
+                math.cos(math.radians(self.rotation_y)),
+                0,
+                math.sin(math.radians(self.rotation_y))
+            )
+            forward = Vec3(
+                -math.sin(math.radians(self.rotation_y)),
+                0,
+                math.cos(math.radians(self.rotation_y))
+            )
+
+            pan_amount = self.distance * self.pan_speed
+            self.target -= right * delta.x * pan_amount * 50
+            self.target -= forward * delta.y * pan_amount * 50
+
+            # Clamp target to reasonable bounds
+            self.target.x = max(-5, min(5, self.target.x))
+            self.target.z = max(-5, min(5, self.target.z))
+            self.target.y = 0  # Keep target on ground plane
+
+            self.update_camera()
+
+    def reset(self):
+        """Reset camera to default view."""
+        self.distance = 10
+        self.rotation_x = 50
+        self.rotation_y = 0
+        self.target = Vec3(0, 0, 0)
+        self.update_camera()
+
+
+class VexField(Entity):
+    """VEX IQ competition field - rectangular playing surface.
+
+    Official VEX IQ competition field specifications:
+    - Size: 8' x 6' (2.44m x 1.83m) as viewed from above
+    - Tiles: 1 foot (305mm) square each, very light grey plastic
+    - Grid: 8 tiles wide x 6 tiles deep = 48 tiles
+    - Perimeter wall: 2.5" (64mm) high
+    - Tiles have continuous dark grid lines forming tile boundaries
+    """
+
+    # Official VEX IQ competition field: 8' wide x 6' deep
+    # Oriented so 8' is horizontal (X axis) and 6' is depth (Z axis)
+    FIELD_WIDTH = 8   # feet (X axis) - horizontal
+    FIELD_LENGTH = 6  # feet (Z axis) - depth
+    TILE_SIZE = 1     # 1 foot per tile
+
+    # VEX IQ field colors
+    # Real tiles are "Very Light Grey" plastic with black lines
+    TILE_COLOR = color.rgb(200, 200, 200)  # Light grey tiles
+    LINE_COLOR = color.rgb(40, 40, 40)     # Dark grey/black lines
+    BORDER_COLOR = color.rgb(60, 60, 60)   # Dark border walls
+    # Alliance and zone colors (Rapid Relay 2024-2025 season)
+    # Using Ursina's color.hsv(h, s, v) where h=0-360, s=0-1, v=0-1
+    ORANGE_COLOR = color.hsv(30, 1, 0.9)     # Orange hue, full saturation, bright
+    BLUE_COLOR = color.hsv(220, 0.8, 0.6)    # Blue hue, high sat, medium bright
+    RED_COLOR = color.hsv(0, 0.8, 0.7)       # Red hue, high sat, medium bright
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -30,80 +155,126 @@ class VexField(Entity):
 
     def create_field(self):
         """Create the field floor and grid lines."""
-        # Field floor - dark gray surface (like foam tiles)
-        # Use flat cube instead of plane (plane model ignores color in Ursina)
+        # Field floor with tiled texture
+        # Texture is in project's textures/ folder (Ursina's default location)
+        # VEX IQ field: 8 tiles wide x 6 tiles deep
+        # Tiling pattern: half-tile on edges (0.5 + 7 + 0.5 = 8, 0.5 + 5 + 0.5 = 6)
+
         self.floor = Entity(
             parent=self,
-            model='cube',
-            scale=(self.FIELD_SIZE, 0.02, self.FIELD_SIZE),
-            position=(0, -0.01, 0),
-            color=self.FIELD_COLOR,
+            model='quad',
+            scale=(self.FIELD_WIDTH, self.FIELD_LENGTH),
+            position=(0, 0, 0),
+            rotation_x=90,  # Rotate to lie flat
+            texture='vex-tile',  # Ursina looks in textures/ folder
+            texture_scale=(self.FIELD_WIDTH, self.FIELD_LENGTH),  # Tile 8x6 times
+            texture_offset=(0.5, 0.5),  # Half-tile offset for edge alignment
             collider='box'
         )
+        print(f"Floor texture: {self.floor.texture}")
 
-        # Grid lines
-        self.create_grid_lines()
-
-        # Field border
+        # Field border (perimeter walls)
         self.create_border()
 
+    def create_zones(self):
+        """Create alliance zones and center platform.
+
+        Based on VEX IQ Rapid Relay 2024-2025 field layout:
+        - Orange center platform (2x2 tiles in the center)
+        - Blue alliance corner (bottom-left, 2x2 tiles)
+        - Red alliance corner (top-right, 2x2 tiles)
+        """
+        zone_height = 0.003  # Slightly raised for visibility
+
+        # Orange center platform (2x2 tiles)
+        # Center of 6x8 field is at (0, 0)
+        Entity(
+            parent=self,
+            model='cube',
+            scale=(2, zone_height, 2),
+            position=(0, zone_height / 2, 0),
+            color=self.ORANGE_COLOR
+        )
+
+        # Blue alliance corner (bottom-left of field)
+        # Position: corner at (-3, -4), so center of 2x2 is at (-2, -3)
+        half_width = self.FIELD_WIDTH / 2
+        half_length = self.FIELD_LENGTH / 2
+        Entity(
+            parent=self,
+            model='cube',
+            scale=(2, zone_height, 2),
+            position=(-half_width + 1, zone_height / 2, -half_length + 1),
+            color=self.BLUE_COLOR
+        )
+
+        # Red alliance corner (top-right of field)
+        # Position: corner at (3, 4), so center of 2x2 is at (2, 3)
+        Entity(
+            parent=self,
+            model='cube',
+            scale=(2, zone_height, 2),
+            position=(half_width - 1, zone_height / 2, half_length - 1),
+            color=self.RED_COLOR
+        )
+
     def create_grid_lines(self):
-        """Create visible grid lines on the field."""
-        grid_spacing = self.FIELD_SIZE / self.GRID_LINES
-        half_size = self.FIELD_SIZE / 2
-        line_width = 0.03  # Wider lines for visibility
+        """Create visible grid lines on the field.
 
-        # Create horizontal and vertical lines
-        for i in range(self.GRID_LINES + 1):
-            offset = -half_size + (i * grid_spacing)
+        VEX IQ tiles have black "+" markings at intersections, not continuous
+        grid lines. Each "+" is about 4 inches (0.33 feet) in each direction.
+        """
+        half_width = self.FIELD_WIDTH / 2
+        half_length = self.FIELD_LENGTH / 2
+        line_width = 0.025  # ~1 inch lines
+        cross_length = 0.33  # ~4 inches for each arm of the "+"
 
-            # Horizontal line (along X)
-            Entity(
-                parent=self,
-                model='cube',
-                scale=(self.FIELD_SIZE, 0.01, line_width),
-                position=(0, 0.005, offset),
-                color=self.GRID_COLOR
-            )
+        # Create "+" crosses at each tile intersection
+        for i in range(self.FIELD_LENGTH + 1):
+            for j in range(self.FIELD_WIDTH + 1):
+                x_pos = -half_width + j * self.TILE_SIZE
+                z_pos = -half_length + i * self.TILE_SIZE
 
-            # Vertical line (along Z)
-            Entity(
-                parent=self,
-                model='cube',
-                scale=(line_width, 0.01, self.FIELD_SIZE),
-                position=(offset, 0.005, 0),
-                color=self.GRID_COLOR
-            )
-
-        # Center cross (more prominent)
-        Entity(
-            parent=self,
-            model='cube',
-            scale=(self.FIELD_SIZE, 0.012, line_width * 1.5),
-            position=(0, 0.006, 0),
-            color=self.ACCENT_COLOR
-        )
-        Entity(
-            parent=self,
-            model='cube',
-            scale=(line_width * 1.5, 0.012, self.FIELD_SIZE),
-            position=(0, 0.006, 0),
-            color=self.ACCENT_COLOR
-        )
+                # Horizontal bar of "+"
+                Entity(
+                    parent=self,
+                    model='cube',
+                    scale=(cross_length, 0.008, line_width),
+                    position=(x_pos, 0.005, z_pos),
+                    color=self.LINE_COLOR
+                )
+                # Vertical bar of "+"
+                Entity(
+                    parent=self,
+                    model='cube',
+                    scale=(line_width, 0.008, cross_length),
+                    position=(x_pos, 0.005, z_pos),
+                    color=self.LINE_COLOR
+                )
 
     def create_border(self):
-        """Create field border walls."""
-        wall_height = 0.25
+        """Create field border walls.
+
+        User requested 4 inch high walls with light grey color.
+        """
+        wall_height = 4 / 12  # 4 inches in feet (simulator units)
         wall_thickness = 0.08
-        half_size = self.FIELD_SIZE / 2
+        wall_color = color.light_gray  # Light grey as requested
+        half_width = self.FIELD_WIDTH / 2
+        half_length = self.FIELD_LENGTH / 2
 
         # Border walls (4 sides)
         walls = [
-            # (position, scale)
-            ((0, wall_height/2, half_size + wall_thickness/2), (self.FIELD_SIZE + wall_thickness*2, wall_height, wall_thickness)),
-            ((0, wall_height/2, -half_size - wall_thickness/2), (self.FIELD_SIZE + wall_thickness*2, wall_height, wall_thickness)),
-            ((half_size + wall_thickness/2, wall_height/2, 0), (wall_thickness, wall_height, self.FIELD_SIZE)),
-            ((-half_size - wall_thickness/2, wall_height/2, 0), (wall_thickness, wall_height, self.FIELD_SIZE)),
+            # Front and back walls (along X axis)
+            ((0, wall_height/2, half_length + wall_thickness/2),
+             (self.FIELD_WIDTH + wall_thickness*2, wall_height, wall_thickness)),
+            ((0, wall_height/2, -half_length - wall_thickness/2),
+             (self.FIELD_WIDTH + wall_thickness*2, wall_height, wall_thickness)),
+            # Side walls (along Z axis)
+            ((half_width + wall_thickness/2, wall_height/2, 0),
+             (wall_thickness, wall_height, self.FIELD_LENGTH)),
+            ((-half_width - wall_thickness/2, wall_height/2, 0),
+             (wall_thickness, wall_height, self.FIELD_LENGTH)),
         ]
 
         for pos, scale in walls:
@@ -112,7 +283,7 @@ class VexField(Entity):
                 model='cube',
                 position=pos,
                 scale=scale,
-                color=self.BORDER_COLOR
+                color=wall_color
             )
 
 
@@ -151,7 +322,9 @@ class RobotPlaceholder(Entity):
         # Convert motor powers to movement
         # Average for forward speed, difference for turning
         forward = (left_power + right_power) / 200  # Normalize to -1 to 1
-        turn = (right_power - left_power) / 200
+        # Tank drive: left faster = turn right, right faster = turn left
+        # In Ursina, positive rotation_y = clockwise = turn right
+        turn = (left_power - right_power) / 200
 
         # Apply movement (scaled for reasonable speed)
         speed = 2.0  # units per second at full power
@@ -174,10 +347,12 @@ class RobotPlaceholder(Entity):
             self.position += world_vel * dt
             self.rotation_y += self.angular_velocity * dt
 
-            # Keep robot on field (simple bounds)
-            bound = 2.8
-            self.x = max(-bound, min(bound, self.x))
-            self.z = max(-bound, min(bound, self.z))
+            # Keep robot on field (8' wide x 6' deep)
+            # Half dimensions minus robot size buffer
+            bound_x = 3.8  # ~8/2 - 0.2 buffer
+            bound_z = 2.8  # ~6/2 - 0.2 buffer
+            self.x = max(-bound_x, min(bound_x, self.x))
+            self.z = max(-bound_z, min(bound_z, self.z))
 
 
 class VexWorld:

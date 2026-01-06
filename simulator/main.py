@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from ursina import *
 
 # Import simulator modules
-from simulator.world import VexField, RobotPlaceholder, VexWorld
+from simulator.world import VexField, RobotPlaceholder, VexWorld, OrbitCamera
 from simulator.control_panel import ControlPanel
 from simulator.gamepad import GamepadManager
 from simulator import vex_stub
@@ -117,6 +117,7 @@ class VexSimulator:
         self.world: VexWorld = None
         self.control_panel: ControlPanel = None
         self.gamepad: GamepadManager = None
+        self.orbit_camera: OrbitCamera = None
 
         # Robot instances (supports multiple in future)
         self.robots: dict[int, RobotInstance] = {}
@@ -176,11 +177,11 @@ class VexSimulator:
         # Register callbacks for vex_stub updates
         self.register_callbacks()
 
+        # Set up orbit camera for mouse controls
+        self.orbit_camera = OrbitCamera()
+
         # Set up keyboard shortcuts
         self.setup_input()
-
-        # Adjust camera for bottom panel (3D view is in top 75%)
-        self.adjust_camera_for_panel()
 
         print("Simulator initialized")
 
@@ -253,36 +254,41 @@ class VexSimulator:
 
     def setup_input(self):
         """Set up keyboard and mouse input handlers."""
+        sim = self  # Capture reference for closure
 
         def input(key):
             if key == 'escape':
-                self.app.quit()
+                sim.app.quit()
             elif key == 'r':
                 # Reset robot position
-                for robot in self.robots.values():
+                for robot in sim.robots.values():
                     if robot.entity:
                         robot.entity.position = robot.start_position
                         robot.entity.rotation_y = robot.start_rotation
+                # Also reset camera
+                sim.orbit_camera.reset()
             elif key == 'c':
-                # Toggle camera view
-                self.toggle_camera()
+                # Toggle camera view (overhead vs angled)
+                sim.toggle_camera()
+            else:
+                # Pass to orbit camera for zoom handling
+                sim.orbit_camera.handle_input(key)
 
         # Make input function global for Ursina
         globals()['input'] = input
 
     def toggle_camera(self):
         """Toggle between different camera views."""
-        # Simple toggle between overhead and angled
-        if camera.rotation_x < 80:
+        # Toggle between overhead and angled using orbit camera
+        if self.orbit_camera.rotation_x < 80:
             # Go to overhead
-            camera.position = (0, 12, 0)
-            camera.rotation_x = 90
-            camera.fov = 50
+            self.orbit_camera.rotation_x = 90
+            self.orbit_camera.distance = 12
         else:
             # Go to angled (default view)
-            camera.position = (0, 9, -6)
-            camera.rotation_x = 50
-            camera.fov = 60
+            self.orbit_camera.rotation_x = 50
+            self.orbit_camera.distance = 10
+        self.orbit_camera.update_camera()
 
     def add_robot(self, name: str = None) -> RobotInstance:
         """Add a new robot to the simulation."""
@@ -373,6 +379,9 @@ class VexSimulator:
         """Main update loop - called every frame by Ursina."""
         dt = time.time() - self.last_update
         self.last_update = time.time()
+
+        # Update orbit camera (handles mouse drag for rotation/pan)
+        self.orbit_camera.update()
 
         # Update FPS display
         self.control_panel.update_fps(dt)
@@ -471,8 +480,11 @@ class VexSimulator:
 
         print("\nControls:")
         print("  ESC - Quit")
-        print("  R   - Reset robot position")
-        print("  C   - Toggle camera view")
+        print("  R   - Reset robot and camera")
+        print("  C   - Toggle camera view (angled/overhead)")
+        print("  Scroll wheel    - Zoom in/out")
+        print("  Middle mouse    - Orbit/rotate camera")
+        print("  Right mouse     - Pan camera")
         if self._debug_gamepad:
             print("\n[Debug mode: Raw gamepad values will print to console]")
         print("")
