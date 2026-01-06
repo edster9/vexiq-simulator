@@ -72,7 +72,8 @@ htmlcov/
 *.log
 logs/
 
-# 3D Models (large files, still being optimized)
+# 3D Models (large CAD files - STEP, OBJ, GLB)
+models/
 simulator/models/
 
 # Ursina model cache
