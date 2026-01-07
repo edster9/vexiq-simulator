@@ -76,6 +76,9 @@ logs/
 models/
 simulator/models/
 
+# Extracted Python code from .iqpython files (auto-generated)
+iqpython/
+
 # Ursina model cache
 models_compressed/
 

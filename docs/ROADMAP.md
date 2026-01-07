@@ -16,6 +16,8 @@ This document outlines the planned development phases for the VEX IQ Simulator. 
 - [x] **Robot movement in 3D world**
 - [x] **Autonomous code testing (no gamepad required)**
 - [x] **Cross-platform gamepad support (Windows/Linux)**
+- [x] **LDraw parts library conversion (524 VEX IQ parts to GLB)**
+- [x] **VEX IQ color palette from LDConfig.ldr**
 
 ---
 
@@ -86,29 +88,34 @@ This document outlines the planned development phases for the VEX IQ Simulator. 
 
 ---
 
-## Phase 4: Robot Designer
+## Phase 4: LDCad Integration (Robot Import)
 
-### 4.1 Component Library
-- [ ] VEX IQ structural parts catalog
-- [ ] Motor models with accurate dimensions
-- [ ] Sensor models with mounting points
-- [ ] Wheel and gear options
+*Note: Instead of building a custom robot designer, we leverage LDCad - a free LDraw CAD tool that VEX IQ teams already use to design their robots.*
 
-### 4.2 Visual Builder
-- [ ] Drag-and-drop part placement
-- [ ] Snap-to-grid and alignment tools
-- [ ] Part connection validation
-- [ ] Real-time mass and balance calculation
+### 4.1 LDraw Parts Library ✓
+- [x] VEX IQ LDraw parts library (524 parts)
+- [x] Batch conversion pipeline (LDraw .dat → GLB)
+- [x] VEX IQ color palette from LDConfig.ldr
+- [ ] Optimized parts (configurable decimation)
+- [ ] Part metadata catalog (names, categories, dimensions)
+
+### 4.2 LDCad Model Import
+- [ ] Parse LDraw .ldr files (single model)
+- [ ] Parse LDraw .mpd files (multi-part document)
+- [ ] Transform matrix handling (position, rotation)
+- [ ] Color code mapping to VEX IQ palette
+- [ ] Submodel/subfile resolution
 
 ### 4.3 Robot Configuration
-- [ ] Define motor ports and positions
-- [ ] Set gear ratios and wheel sizes
-- [ ] Configure sensor placements
+- [ ] Identify motor parts and assign ports
+- [ ] Identify sensor parts and configure
+- [ ] Define wheel assemblies for drivetrain
+- [ ] Mark articulated joints (arms, claws, lifts)
 - [ ] Export configuration to `.iqpython` format
 
 ### 4.4 Design Validation
 - [ ] Size constraint checking (fits in sizing box)
-- [ ] Motor count limits
+- [ ] Motor count limits (12 max)
 - [ ] Part count tracking
 - [ ] Center of gravity visualization
 
@@ -162,9 +169,11 @@ This document outlines the planned development phases for the VEX IQ Simulator. 
 
 ### File Formats
 
-- **Robot Design**: JSON-based format compatible with `.iqpython`
+- **Robot Design**: LDraw .ldr/.mpd files (designed in LDCad)
+- **Parts Library**: LDraw .dat files → GLB (converted via Blender)
 - **Field Layout**: JSON with object positions and properties
 - **Autonomous Paths**: JSON waypoints with timing data
+- **Simulator Config**: JSON for motor/sensor port mappings
 
 ---
 
@@ -215,6 +224,9 @@ pip install -r requirements-dev.txt  # For development tools
 - [RobotMesh Studio](https://www.robotmesh.com/) - Alternative VEX programming environment
 - [Gazebo](https://gazebosim.org/) - Professional robotics simulator
 - [PyBullet](https://pybullet.org/) - Physics simulation library
+- [LDCad](http://www.melkert.net/LDCad) - LDraw CAD editor for building virtual LEGO/VEX models
+- [LDraw.org](https://www.ldraw.org/) - Open standard for LEGO CAD programs
+- [ExportLDraw](https://github.com/cuddlyogre/ExportLDraw) - Blender addon for LDraw import/export
 
 ---
 
