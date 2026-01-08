@@ -14,13 +14,16 @@ import threading
 import time
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add parent directory to path for imports and change to project root
+# This is needed for Ursina to find model files with relative paths
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+os.chdir(PROJECT_ROOT)
 
 from ursina import *
 
 # Import simulator modules
-from simulator.world import VexField, RobotPlaceholder, VexWorld, OrbitCamera
+from simulator.world import VexField, RobotPlaceholder, LDrawRobot, VexWorld, OrbitCamera
 from simulator.control_panel import ControlPanel
 from simulator.gamepad import GamepadManager
 from simulator import vex_stub
@@ -39,17 +42,18 @@ class RobotInstance:
     def __init__(self, robot_id: int, name: str = "Robot"):
         self.robot_id = robot_id
         self.name = name
-        self.entity: RobotPlaceholder = None
+        self.entity: LDrawRobot = None
         self.code_thread: threading.Thread = None
         self.running = False
 
-        # Position on field
-        self.start_position = (0, 0.15, 0)
-        self.start_rotation = 0
+        # Position on field - center of field, slightly raised
+        # LDraw robot origin is at (0,0,0) in LDraw coordinates
+        self.start_position = (0, 0.3, 0)
+        self.start_rotation = 180  # Face toward camera
 
     def spawn(self, parent=None):
         """Create the robot entity in the 3D world."""
-        self.entity = RobotPlaceholder()
+        self.entity = LDrawRobot()
         self.entity.position = self.start_position
         self.entity.rotation_y = self.start_rotation
         return self.entity
@@ -146,6 +150,11 @@ class VexSimulator:
             development_mode=False,
             vsync=False
         )
+
+        # Override asset folder to project root so models can be found
+        # Ursina uses asset_folder for model lookups
+        from ursina import application
+        application.asset_folder = PROJECT_ROOT
 
         # Limit frame rate to 60 FPS to reduce CPU usage
         from panda3d.core import ClockObject

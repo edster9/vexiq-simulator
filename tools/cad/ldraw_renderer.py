@@ -134,12 +134,14 @@ class LDrawModelRenderer:
                  parent = None,
                  use_shader: bool = True,
                  skip_rotation: bool = False,
+                 y_offset: float = 0.0,
                  verbose: bool = False):
         self.doc = doc
         self.glb_path = glb_path
         self.parent = parent
         self.use_shader = use_shader
         self.skip_rotation = skip_rotation
+        self.y_offset = y_offset  # Applied to all parts during rendering
         self.verbose = verbose
 
         # Use provided project_root or current working directory
@@ -257,7 +259,7 @@ class LDrawModelRenderer:
         # Ursina: X=right, Y=up, Z=forward
         # Only negate Y (the down->up flip)
         pos_x = world_x_ldu * POSITION_SCALE
-        pos_y = -world_y_ldu * POSITION_SCALE  # Negate Y
+        pos_y = -world_y_ldu * POSITION_SCALE + self.y_offset  # Negate Y + offset
         pos_z = world_z_ldu * POSITION_SCALE   # Z stays same
 
         # Get color

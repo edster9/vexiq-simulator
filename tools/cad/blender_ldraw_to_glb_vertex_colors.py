@@ -1,12 +1,13 @@
 """
-Batch convert LDraw .dat files to GLB with VERTEX COLORS as a COLOR MASK.
+Batch convert LDraw .dat files to GLB with VERTEX COLORS preserving part colors.
 Run with: blender --background --python blender_ldraw_to_glb_vertex_colors.py
 
-This version bakes vertex colors as a MASK:
-- BLACK (0,0,0) for rubber/black areas -> stays black regardless of MPD color
-- WHITE (1,1,1) for everything else -> takes the MPD color directly
+This version bakes vertex colors with the following logic:
+- Color 16 (Main Color / inherit) -> WHITE (1,1,1) -> takes MPD entity color
+- All other colors -> actual LDraw color -> preserved regardless of MPD color
 
-This matches how LDCad works: rubber parts stay black, other parts take color.
+This matches how LDCad works: only "main color" areas change when you set
+the part color; other colored sections (buttons, labels, etc.) stay fixed.
 
 Requires: ExportLDraw addon installed in Blender
           https://github.com/cuddlyogre/ExportLDraw
@@ -27,18 +28,39 @@ OUTPUT_DIR = r"\\wsl$\Ubuntu-24.04\home\edster\projects\esahakian\vexiq\models\l
 # No skip patterns - convert all parts including v2 variants
 SKIP_PATTERNS = []
 
-# Colors that should stay BLACK (rubber, black plastic)
-# These will NOT take the MPD entity color
-RUBBER_BLACK_CODES = {
-    0,      # Black
-    256,    # Rubber_Black
-    375,    # Rubber_Grey (still dark rubber)
-    70,     # VEX Black
+# LDraw color lookup table (from LDConfig.ldr)
+# Format: color_code -> (R, G, B, A) in 0-1 range
+LDRAW_COLORS = {
+    0: (0.13, 0.13, 0.13, 1.0),      # Black
+    1: (0.0, 0.20, 0.70, 1.0),       # Blue
+    2: (0.0, 0.55, 0.08, 1.0),       # Green
+    4: (0.77, 0.0, 0.15, 1.0),       # Red
+    7: (0.60, 0.60, 0.60, 1.0),      # Light Gray
+    8: (0.40, 0.40, 0.40, 1.0),      # Dark Gray
+    14: (1.0, 0.84, 0.0, 1.0),       # Yellow
+    15: (1.0, 1.0, 1.0, 1.0),        # White
+    16: (1.0, 1.0, 1.0, 1.0),        # Main Color (inherit) -> WHITE = colorable
+    24: (0.50, 0.50, 0.50, 1.0),     # Edge Color
+    70: (0.15, 0.16, 0.16, 1.0),     # VEX Black
+    71: (0.70, 0.71, 0.70, 1.0),     # VEX Light Gray
+    72: (0.33, 0.35, 0.35, 1.0),     # VEX Dark Gray
+    73: (0.82, 0.15, 0.19, 1.0),     # VEX Red
+    74: (0.00, 0.59, 0.22, 1.0),     # VEX Green
+    75: (0.00, 0.47, 0.78, 1.0),     # VEX Blue
+    76: (1.00, 0.80, 0.00, 1.0),     # VEX Yellow
+    77: (0.85, 0.85, 0.84, 1.0),     # VEX White
+    78: (1.00, 0.40, 0.12, 1.0),     # VEX Orange
+    79: (0.37, 0.15, 0.62, 1.0),     # VEX Purple
+    80: (0.54, 0.55, 0.55, 1.0),     # VEX Medium Gray
+    256: (0.13, 0.13, 0.13, 1.0),    # Rubber_Black
+    375: (0.40, 0.40, 0.40, 1.0),    # Rubber_Grey
+    494: (0.70, 0.55, 0.35, 1.0),    # Electric_Contact_Copper
 }
 
-# Mask colors
-BLACK_MASK = (0.0, 0.0, 0.0, 1.0)  # Stays black, ignores entity color
-WHITE_MASK = (1.0, 1.0, 1.0, 1.0)  # Takes full entity color from MPD
+# White marker for colorable areas (color 16)
+WHITE_MASK = (1.0, 1.0, 1.0, 1.0)
+# Default for unknown colors
+DEFAULT_COLOR = (0.5, 0.5, 0.5, 1.0)
 
 
 def should_skip(filename):
@@ -62,33 +84,40 @@ def clear_scene():
             bpy.data.materials.remove(block)
 
 
-def get_mask_color_from_name(mat_name):
+def get_vertex_color_from_name(mat_name):
     """
-    Extract LDraw color code from material name and return mask color.
+    Extract LDraw color code from material name and return vertex color.
 
-    Returns BLACK for rubber/black parts, WHITE for everything else.
-    This creates a color mask that works with MPD entity colors.
+    - Color 16 (Main Color) -> WHITE (1,1,1) -> will take entity color in shader
+    - All other colors -> actual LDraw color -> preserved as-is
+
+    This matches LDCad behavior: only "main color" areas are colorable.
     """
     if not mat_name:
-        return WHITE_MASK  # Default: take entity color
+        return WHITE_MASK  # Default: colorable
 
     try:
         if mat_name.startswith("("):
             parts = mat_name.strip("()").split(",")
             code_str = parts[0].strip().strip("'\"")
             code = int(code_str)
-            # Return black for rubber/black, white for everything else
-            if code in RUBBER_BLACK_CODES:
-                return BLACK_MASK
-            return WHITE_MASK
+            # Color 16 = Main Color = colorable = WHITE
+            if code == 16:
+                return WHITE_MASK
+            # All other colors: return the actual LDraw color
+            return LDRAW_COLORS.get(code, DEFAULT_COLOR)
     except (ValueError, IndexError):
         pass
 
-    return WHITE_MASK  # Default: take entity color
+    return WHITE_MASK  # Default: colorable
 
 
 def bake_vertex_colors(obj):
-    """Bake color mask into vertex colors (black=rubber, white=colorable)."""
+    """Bake LDraw colors into vertex colors.
+
+    - White (1,1,1) for color 16 areas = colorable via entity color
+    - Actual colors for everything else = preserved as-is
+    """
     mesh = obj.data
 
     # Create vertex color layer (Blender 4.0+ uses color attributes)
@@ -101,13 +130,13 @@ def bake_vertex_colors(obj):
             mesh.vertex_colors.new(name='Col')
         color_attr = mesh.vertex_colors.active
 
-    # Get mask color for each material (black or white)
+    # Get vertex color for each material
     mat_colors = {}
     for i, mat in enumerate(mesh.materials):
         mat_name = mat.name if mat else None
-        mat_colors[i] = get_mask_color_from_name(mat_name)
+        mat_colors[i] = get_vertex_color_from_name(mat_name)
 
-    # Apply mask colors to each face based on material index
+    # Apply colors to each face based on material index
     for poly in mesh.polygons:
         mat_idx = poly.material_index
         col = mat_colors.get(mat_idx, WHITE_MASK)
@@ -181,9 +210,9 @@ def process_ldraw(input_path, output_path):
 
 def main():
     print("\n" + "=" * 60)
-    print("Blender LDraw to GLB Batch Converter (COLOR MASK)")
-    print("  Black = rubber (stays black)")
-    print("  White = colorable (takes MPD color)")
+    print("Blender LDraw to GLB Batch Converter (PRESERVE COLORS)")
+    print("  Color 16 (Main Color) = WHITE = colorable via MPD")
+    print("  All other colors = preserved as-is")
     print("=" * 60)
     print(f"Input:  {INPUT_DIR}")
     print(f"Output: {OUTPUT_DIR}")

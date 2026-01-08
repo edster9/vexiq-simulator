@@ -373,6 +373,15 @@ class LDrawRobot(Entity):
     movement interface as RobotPlaceholder for simulation control.
     """
 
+    # Scale factor to convert LDraw/Blender units to field units (feet)
+    # 1 LDU = 0.4mm, 1 foot = 304.8mm, POSITION_SCALE = 0.02
+    # So: 1 foot = 762 LDU = 15.24 Ursina units at POSITION_SCALE
+    # We want 1 foot = 1 Ursina unit, so scale by 1/15.24
+    ROBOT_SCALE = 1.0 / 15.24  # ≈ 0.066
+
+    # Y offset to place robot on ground (adjusted for LDraw origin)
+    ROBOT_Y_OFFSET = 0.05  # feet above ground
+
     def __init__(self, model_path: str = None, **kwargs):
         super().__init__(**kwargs)
 
@@ -390,6 +399,12 @@ class LDrawRobot(Entity):
         # Load the LDraw model using shared renderer
         self.load_model(model_path)
 
+        # Scale robot to match field units (feet)
+        self.scale = self.ROBOT_SCALE
+
+        # Auto-position robot on ground based on bounding box
+        self._position_on_ground()
+
     def load_model(self, model_path: str):
         """Load and render an LDraw MPD/LDR file."""
         if not os.path.exists(model_path):
@@ -403,19 +418,65 @@ class LDrawRobot(Entity):
             print("Warning: No main model found in document")
             return
 
-        # Use the shared renderer - parts are parented to this entity
+        # First pass: render with no offset to calculate bounding box
         self.renderer = LDrawModelRenderer(
             doc,
             glb_path=GLB_PATH_COLORED,
             project_root=PROJECT_ROOT,
             parent=self,
             use_shader=True,
+            y_offset=0,
             verbose=False
         )
         self.renderer.render()
 
+        # Calculate min_y from rendered entities to position robot on ground
+        min_y = self._calculate_min_y()
+
+        # Apply offset to bring bottom to Y=0
+        if min_y != 0:
+            # Clear first render and re-render with ground offset
+            for entity in self.renderer.entities:
+                entity.enabled = False
+                destroy(entity)
+            self.renderer.entities.clear()
+            self.renderer.part_count = 0
+
+            self.renderer.y_offset = min_y  # Shift to place bottom at Y=0
+            self.renderer.render()
+
         print(f"Loaded {self.renderer.part_count} parts "
               f"({len(self.renderer.missing_parts)} missing)")
+
+    def _calculate_min_y(self):
+        """Calculate the minimum Y position of all parts."""
+        if not self.renderer or not self.renderer.entities:
+            return 0
+
+        min_y = float('inf')
+        for entity in self.renderer.entities:
+            # Get entity position (in renderer's local space)
+            local_y = entity.y
+
+            # Try to get model bounds
+            if hasattr(entity, 'model') and entity.model:
+                try:
+                    bounds = entity.model.getTightBounds()
+                    if bounds:
+                        # Add model's local min to entity position
+                        min_y = min(min_y, local_y + bounds[0].y)
+                        continue
+                except:
+                    pass
+
+            min_y = min(min_y, local_y)
+
+        return min_y if min_y != float('inf') else 0
+
+    def _position_on_ground(self):
+        """Position robot so wheels sit on ground (Y=0)."""
+        # Position is now handled by y_offset in renderer
+        pass
 
     @property
     def part_count(self) -> int:
@@ -435,7 +496,8 @@ class LDrawRobot(Entity):
         speed = 2.0
         turn_speed = 90
 
-        self.velocity = Vec3(0, 0, forward * speed)
+        # Negate forward to match LDraw model orientation
+        self.velocity = Vec3(0, 0, -forward * speed)
         self.angular_velocity = turn * turn_speed
 
     def move(self, dt):

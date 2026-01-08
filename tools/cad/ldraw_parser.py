@@ -30,51 +30,74 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 
 
-# LDraw Color codes from LDConfig.ldr
+# LDraw Color codes from VEX IQ LDConfig.ldr (by Philo, 2017/05/09)
+# Source: C:\Apps\VEXIQ_2018-01-19\LDConfig.ldr
 # Format: color_code -> (r, g, b, name)
 LDRAW_COLORS = {
-    # Standard LDraw colors
-    0: (0.13, 0.13, 0.13, "Black"),
-    1: (0.00, 0.20, 0.70, "Blue"),
-    2: (0.00, 0.55, 0.08, "Green"),
-    3: (0.00, 0.60, 0.62, "Dark Turquoise"),
-    4: (0.77, 0.00, 0.15, "Red"),
-    5: (0.87, 0.40, 0.58, "Dark Pink"),
-    6: (0.36, 0.13, 0.00, "Brown"),
-    7: (0.76, 0.76, 0.76, "Light Gray"),
-    8: (0.39, 0.37, 0.32, "Dark Gray"),
-    9: (0.42, 0.67, 0.86, "Light Blue"),
-    10: (0.47, 0.93, 0.46, "Bright Green"),
-    11: (0.33, 0.65, 0.69, "Light Turquoise"),
-    12: (0.99, 0.50, 0.45, "Salmon"),
-    13: (0.98, 0.64, 0.78, "Pink"),
-    14: (1.00, 0.86, 0.00, "Yellow"),
-    15: (1.00, 1.00, 1.00, "White"),
-    17: (0.73, 1.00, 0.81, "Light Green"),
-    18: (0.99, 0.91, 0.59, "Light Yellow"),
-    19: (0.91, 0.81, 0.63, "Tan"),
-    20: (0.84, 0.77, 0.90, "Light Violet"),
-    22: (0.51, 0.00, 0.48, "Purple"),
-    25: (1.00, 0.52, 0.00, "Orange"),
-    26: (0.84, 0.00, 0.56, "Magenta"),
-    27: (0.85, 0.94, 0.16, "Lime"),
-    28: (0.77, 0.59, 0.31, "Dark Tan"),
-    29: (0.90, 0.76, 0.87, "Bright Pink"),
     # Special colors
-    16: (1.00, 1.00, 1.00, "Main Color"),      # Inherits from parent (render as white)
-    24: (0.50, 0.50, 0.50, "Edge Color"),      # Edge/line color
-    # VEX IQ specific colors
-    70: (0.15, 0.16, 0.16, "VEX Black"),       # #272929
-    71: (0.70, 0.71, 0.70, "VEX Light Gray"),  # #B3B5B3
-    72: (0.33, 0.35, 0.35, "VEX Dark Gray"),   # #545858
-    73: (0.54, 0.55, 0.55, "VEX Medium Gray"), # #8A8C8C
-    320: (0.82, 0.15, 0.19, "VEX Red"),        # #D22630
-    321: (0.00, 0.59, 0.22, "VEX Green"),      # #009639
-    322: (0.00, 0.47, 0.78, "VEX Blue"),       # #0078C8
-    323: (1.00, 0.80, 0.00, "VEX Yellow"),     # #FFCC00
-    324: (0.85, 0.85, 0.84, "VEX White"),      # #D9D9D6
-    325: (1.00, 0.40, 0.12, "VEX Orange"),     # #FF661F
-    326: (0.37, 0.15, 0.62, "VEX Purple"),     # #5E269E
+    16: (1.00, 1.00, 1.00, "Main Color"),           # Inherits from parent (render as white)
+    24: (0.50, 0.50, 0.50, "Edge Color"),           # Edge/line color
+
+    # VEX IQ Solid Colors (from official LDConfig)
+    0: (0.145, 0.157, 0.165, "VEX Black"),          # #25282A
+    2: (0.000, 0.588, 0.224, "VEX Green"),          # #009639
+    4: (0.824, 0.149, 0.188, "VEX Red"),            # #D22630
+    5: (0.898, 0.427, 0.694, "VEX Pink"),           # #E56DB1
+    7: (0.698, 0.706, 0.698, "VEX Light Gray"),     # #B2B4B2
+    10: (0.263, 0.690, 0.165, "VEX Bright Green"),  # #43B02A
+    11: (0.000, 0.698, 0.765, "VEX Teal"),          # #00B2C3
+    14: (1.000, 0.804, 0.000, "VEX Yellow"),        # #FFCD00
+    15: (1.000, 1.000, 1.000, "VEX Bright White"),  # #FFFFFF
+    17: (0.761, 0.855, 0.722, "Light Green"),       # #C2DAB8
+    22: (0.373, 0.145, 0.624, "VEX Purple"),        # #5F259F
+    25: (1.000, 0.404, 0.122, "VEX Orange"),        # #FF671F
+    26: (0.882, 0.000, 0.596, "VEX Magenta"),       # #E10098
+    27: (0.710, 0.741, 0.000, "VEX Chartreuse"),    # #B5BD00
+    71: (0.537, 0.553, 0.553, "VEX Medium Gray"),   # #898D8D
+    72: (0.329, 0.345, 0.353, "VEX Dark Gray"),     # #54585A
+    73: (0.000, 0.467, 0.784, "VEX Blue"),          # #0077C8 - pins, gears, connectors
+    84: (0.796, 0.376, 0.082, "VEX Burnt Orange"),  # #CB6015
+    89: (0.000, 0.200, 0.627, "VEX Navy Blue"),     # #0033A0
+    112: (0.420, 0.357, 0.780, "VEX Lavender"),     # #6B5BC7
+    115: (0.592, 0.843, 0.000, "VEX Lime Green"),   # #97D700
+    150: (0.733, 0.780, 0.839, "VEX Light Slate Gray"),  # #BBC7D6
+    151: (0.851, 0.851, 0.839, "VEX White"),        # #D9D9D6
+    191: (0.855, 0.667, 0.000, "VEX Gold"),         # #DAAA00
+    212: (0.384, 0.710, 0.898, "VEX Sky Blue"),     # #62B5E5
+    216: (0.463, 0.137, 0.184, "VEX Maroon"),       # #76232F
+    272: (0.000, 0.298, 0.592, "VEX Royal Blue"),   # #004C97
+    288: (0.125, 0.361, 0.251, "VEX Dark Green"),   # #205C40
+    320: (0.651, 0.098, 0.180, "VEX Crimson Red"),  # #A6192E
+    321: (0.196, 0.384, 0.584, "VEX Denim Blue"),   # #326295
+    462: (1.000, 0.596, 0.000, "VEX Citrus Orange"),  # #FF9800
+    503: (0.780, 0.788, 0.780, "VEX Very Light Gray"),  # #C7C9C7
+
+    # VEX IQ Rubber Colors
+    256: (0.129, 0.129, 0.129, "Rubber Black"),     # #212121
+    504: (0.537, 0.529, 0.533, "Rubber Gray"),      # #898788
+
+    # VEX IQ Transparent Colors
+    33: (0.000, 0.200, 0.627, "VEX Trans Navy Blue"),  # #0033A0
+    34: (0.137, 0.471, 0.255, "VEX Trans Green"),   # #237841
+    35: (0.263, 0.690, 0.165, "VEX Trans Bright Green"),  # #43B02A
+    36: (0.824, 0.149, 0.188, "VEX Trans Red"),     # #D22630
+    40: (0.000, 0.000, 0.000, "VEX Trans Black"),   # #000000
+    41: (0.000, 0.467, 0.784, "VEX Trans Blue"),    # #0077C8
+    42: (0.710, 0.741, 0.000, "VEX Trans Chartreuse"),  # #B5BD00
+    43: (0.384, 0.710, 0.898, "VEX Trans Sky Blue"),  # #62B5E5
+    45: (0.898, 0.427, 0.694, "VEX Trans Pink"),    # #E56DB1
+    46: (0.855, 0.667, 0.000, "VEX Trans Gold"),    # #DAAA00
+    47: (0.988, 0.988, 0.988, "VEX Clear"),         # #FCFCFC
+    52: (0.373, 0.145, 0.624, "VEX Trans Purple"),  # #5F259F
+    54: (1.000, 0.804, 0.000, "VEX Trans Yellow"),  # #FFCD00
+    55: (0.537, 0.553, 0.553, "VEX Trans Medium Gray"),  # #898D8D
+    56: (0.329, 0.345, 0.353, "VEX Trans Dark Gray"),  # #54585A
+    57: (1.000, 0.404, 0.122, "VEX Trans Orange"),  # #FF671F
+
+    # Internal colors
+    32: (0.000, 0.000, 0.000, "Trans Black IR Lens"),  # #000000
+    80: (0.816, 0.816, 0.816, "Metal"),             # #D0D0D0
+    334: (0.882, 0.431, 0.075, "Chrome Gold"),      # #E16E13
 }
 
 # Alias for backward compatibility

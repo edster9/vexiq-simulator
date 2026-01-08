@@ -1,98 +1,140 @@
-# CAD Conversion Tools
+# LDraw CAD Conversion Tools
 
-This directory contains Blender scripts for converting LDraw VEX IQ parts to GLB format for use in the Ursina 3D engine.
+This directory contains tools for converting VEX IQ LDraw parts to GLB format and rendering LDraw models in Ursina.
+
+## Overview
+
+The pipeline converts LDraw .dat part files to GLB with vertex colors, then renders complete robot assemblies from .mpd/.ldr files.
+
+```
+LDraw .dat parts → Blender → GLB with vertex colors → Ursina renderer
+                                                           ↑
+LDraw .mpd/.ldr models (positions, rotations, colors) ────┘
+```
 
 ## Prerequisites
 
-1. **Blender** (tested with 4.x)
-2. **ExportLDraw Blender Addon**: https://github.com/cuddlyogre/ExportLDraw
-3. **VEX IQ LDraw Parts Library**: Download from LDraw.org or VEX forums
+1. **Blender 4.x+** with [ExportLDraw addon](https://github.com/cuddlyogre/ExportLDraw)
+2. **VEX IQ LDraw Parts Library** (from SnapCAD or Philo's unofficial library)
+3. **Python 3.12+** with Ursina and Panda3D
 
-## Scripts
+## Files
 
-### blender_ldraw_to_glb.py
+| File | Purpose |
+|------|---------|
+| `blender_ldraw_to_glb_vertex_colors.py` | Batch convert .dat parts to GLB with color preservation |
+| `blender_ldraw_to_glb.py` | Batch convert .dat parts to plain GLB (no colors) |
+| `render_ldraw_model.py` | Render .mpd/.ldr models in Ursina |
+| `ldraw_parser.py` | Parse LDraw file format |
+| `normal_lighting_shader.py` | Custom shader for headlight-style lighting |
 
-Batch converts all LDraw .dat part files to GLB format.
+## Color Preservation Logic
 
-```bash
-blender --background --python blender_ldraw_to_glb.py
+The conversion preserves LDraw's color system exactly like LDCad:
+
+### In Blender Pipeline (`blender_ldraw_to_glb_vertex_colors.py`)
+
+Vertex colors are baked based on LDraw color codes:
+
+- **Color 16 (Main Color)** → WHITE (1,1,1) → Colorable via MPD file
+- **All other colors** → Actual LDraw color → Preserved as-is
+
+This means:
+- Black rubber tires stay black regardless of part color
+- Motor buttons/labels keep their original colors
+- Brain screen areas keep their colors
+- Only "main color" areas change when you set part color in MPD
+
+### In Shader (`normal_lighting_shader.py`)
+
+The fragment shader detects white vertex colors:
+- White areas (>0.95 on all channels) → Use entity color from MPD
+- Non-white areas → Use preserved vertex color
+
+## Usage
+
+### Step 1: Convert LDraw Parts to GLB (Windows)
+
+```powershell
+# Delete existing GLBs to force reconversion
+Remove-Item models\ldraw_colored\*.glb
+
+# Run Blender conversion
+blender --background --python tools/cad/blender_ldraw_to_glb_vertex_colors.py
 ```
 
-**Configuration** (edit variables at top of script):
-- `LDRAW_LIBRARY`: Path to VEX IQ LDraw library (contains `parts/`, `p/` folders)
-- `INPUT_DIR`: Path to parts folder (usually `LDRAW_LIBRARY/parts`)
+Configuration (edit at top of script):
+- `LDRAW_LIBRARY`: Path to VEX IQ LDraw library
+- `INPUT_DIR`: Path to parts folder
 - `OUTPUT_DIR`: Destination for GLB files
 
-### blender_ldraw_to_glb_optimized.py
-
-Same as above but applies mesh optimization:
-- **Decimate modifier** (50% face reduction by default)
-- **Weighted Normal modifier** for improved shading
-
-Produces smaller files at the cost of some detail. Adjust `DECIMATE_RATIO` (0.0-1.0) to control quality vs size.
-
-### blender_ldraw_test_single.py
-
-Interactive test script for importing a single LDraw part. Useful for:
-- Testing the ExportLDraw addon setup
-- Experimenting with import settings
-- Manual export with custom settings
+### Step 2: Render LDraw Models (WSL/Linux)
 
 ```bash
-blender --python blender_ldraw_test_single.py
+python tools/cad/render_ldraw_model.py models/your_robot.mpd
 ```
 
-## Test Scripts (Ursina)
+Options:
+- `--plain`: Use plain GLB models without vertex colors
 
-### test_robot_frame_ldraw.py
+## LDraw Color Codes
 
-Renders a sample robot using original (non-decimated) GLB parts in Ursina. Demonstrates:
-- Loading GLB parts with correct scale (SCALE=0.25)
-- VEX IQ pitch calculations (12.7mm = 0.127 units)
-- VEX IQ color palette from LDConfig.ldr
-- Multiple robot instances with different team colors
+From LDConfig.ldr (normalized to 0-1):
 
-### test_robot_frame_ldraw_optimized.py
+| Code | Color | RGB |
+|------|-------|-----|
+| 0 | Black | 0.13, 0.13, 0.13 |
+| 14 | Yellow | 1.0, 0.84, 0.0 |
+| 15 | White | 1.0, 1.0, 1.0 |
+| 16 | Main Color | (colorable) |
+| 70 | VEX Black | 0.15, 0.16, 0.16 |
+| 71 | VEX Light Gray | 0.70, 0.71, 0.70 |
+| 73 | VEX Red | 0.82, 0.15, 0.19 |
+| 74 | VEX Green | 0.00, 0.59, 0.22 |
+| 75 | VEX Blue | 0.00, 0.47, 0.78 |
+| 76 | VEX Yellow | 1.00, 0.80, 0.00 |
+| 256 | Rubber Black | 0.13, 0.13, 0.13 |
 
-Same as above but uses decimated parts from `models/ldraw_optimized/`.
+## Directory Structure
 
-## VEX IQ Color Palette
-
-Colors from LDConfig.ldr (normalized to 0-1 for Ursina):
-
-```python
-VEX_BLACK = color.rgba(0.15, 0.16, 0.16, 1)
-VEX_RED = color.rgba(0.82, 0.15, 0.19, 1)
-VEX_GREEN = color.rgba(0.0, 0.59, 0.22, 1)
-VEX_BLUE = color.rgba(0.0, 0.47, 0.78, 1)
-VEX_YELLOW = color.rgba(1.0, 0.80, 0.0, 1)
-VEX_WHITE = color.rgba(0.85, 0.85, 0.84, 1)
-VEX_ORANGE = color.rgba(1.0, 0.40, 0.12, 1)
-VEX_PURPLE = color.rgba(0.37, 0.15, 0.62, 1)
-VEX_LIGHT_GRAY = color.rgba(0.70, 0.71, 0.70, 1)
-VEX_MEDIUM_GRAY = color.rgba(0.54, 0.55, 0.55, 1)
-VEX_DARK_GRAY = color.rgba(0.33, 0.35, 0.35, 1)
+```
+models/
+├── ldraw_colored/     # GLB parts with vertex colors (colorable + preserved)
+├── ldraw/glb/         # Plain GLB parts (no vertex colors)
+├── *.mpd              # Robot model files
+└── *.ldr              # Robot model files
 ```
 
 ## Part Number Reference
 
-VEX IQ parts follow this naming convention:
+VEX IQ parts follow this naming: `228-XXXX-YYY.dat`
 
 | Part Number | Description |
 |-------------|-------------|
-| 228-2500-001 to 016 | 1-wide Beams (1x2 to 1x20) |
-| 228-2500-017 to 030 | 2-wide Beams (2x2 to 2x20) |
-| 228-2500-034 to 045 | Plates (various sizes) |
+| 228-2500-001 to 016 | 1-wide Beams |
+| 228-2500-017 to 030 | 2-wide Beams |
 | 228-2500-208 | 44mm Wheel Hub |
-| 228-2500-211 | 65mm Wheel Hub |
-| 228-2500-213 | 12 Tooth Gear |
-| 228-2500-214 | 36 Tooth Gear |
 | 228-2540 | Robot Brain |
-| 228-2560 | Smart Motor |
+| 228-2540c02 | Brain with Battery |
 
-## Notes
+## Shader Details
 
-- LDraw units (LDU): 1 LDU = 0.4mm
-- VEX IQ pitch: 12.7mm (0.5 inches) between holes
-- GLB scale factor: 0.25 works well in Ursina
-- Materials are stripped during conversion; colors applied at runtime
+The custom shader provides:
+
+1. **Headlight-style lighting**: Light comes from camera direction, consistent from any angle
+2. **Normal-based shading**: Faces pointing at camera are brighter (0.95), away are darker (0.7)
+3. **Color preservation**: Non-white vertex colors are used directly; white areas take entity color
+
+## Troubleshooting
+
+### Colors look wrong
+- Re-export GLB files with the vertex color script
+- Ensure shader is applied: `entity.shader = normal_lighting_shader`
+
+### Part appears all one color
+- Check that vertex colors exported correctly
+- Verify the part has color 16 areas (check in LDCad)
+
+### Blender can't find WSL files
+- Use full UNC path: `\\wsl$\Ubuntu-24.04\home\...`
+- Ensure WSL is running

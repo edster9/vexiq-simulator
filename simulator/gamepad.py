@@ -8,12 +8,19 @@ Supports multiple gamepads for local multiplayer (up to 4 controllers).
 Automatically detects platform (Windows/Linux) and uses appropriate mappings.
 """
 
-import pygame
 import platform
 from typing import Optional
 
 # Detect platform
 IS_WINDOWS = platform.system() == 'Windows'
+
+# Try to import pygame, but make it optional
+try:
+    import pygame
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
+    print("Warning: pygame not available - gamepad support disabled")
 
 
 class GamepadState:
@@ -84,16 +91,12 @@ class GamepadManager:
     DEADZONE = 0.1
 
     def __init__(self, debug: bool = False):
-        # Initialize pygame joystick subsystem
-        pygame.init()
-        pygame.joystick.init()
-
         # Debug mode to print raw gamepad values
         self.debug = debug
         self._debug_counter = 0
 
         # Multiple gamepad support
-        self.joysticks: dict[int, pygame.joystick.Joystick] = {}
+        self.joysticks: dict = {}
         self.gamepad_states: dict[int, GamepadState] = {}
 
         # Legacy single-gamepad interface (for backwards compatibility)
@@ -107,6 +110,15 @@ class GamepadManager:
             'FUp': False, 'FDown': False,
         }
 
+        # Only initialize pygame if available
+        if not PYGAME_AVAILABLE:
+            print("Gamepad manager: pygame not available, gamepad disabled")
+            return
+
+        # Initialize pygame joystick subsystem
+        pygame.init()
+        pygame.joystick.init()
+
         print(f"Gamepad manager initialized (Platform: {platform.system()})")
 
         # Scan for connected gamepads
@@ -114,6 +126,9 @@ class GamepadManager:
 
     def scan_gamepads(self):
         """Scan for all connected gamepads."""
+        if not PYGAME_AVAILABLE:
+            return
+
         pygame.joystick.quit()
         pygame.joystick.init()
 
@@ -176,6 +191,9 @@ class GamepadManager:
 
     def update(self):
         """Update all gamepad states - call each frame."""
+        if not PYGAME_AVAILABLE:
+            return
+
         # Process pygame events
         pygame.event.pump()
 
@@ -207,7 +225,7 @@ class GamepadManager:
         else:
             self.connected = False
 
-    def _update_single_gamepad(self, joystick: pygame.joystick.Joystick, state: GamepadState):
+    def _update_single_gamepad(self, joystick, state: GamepadState):
         """Update state for a single gamepad."""
         num_axes = joystick.get_numaxes()
         num_buttons = joystick.get_numbuttons()
@@ -324,7 +342,8 @@ class GamepadManager:
 
     def close(self):
         """Clean up pygame resources."""
-        pygame.joystick.quit()
+        if PYGAME_AVAILABLE:
+            pygame.joystick.quit()
 
 
 # Keyboard fallback for testing without gamepad

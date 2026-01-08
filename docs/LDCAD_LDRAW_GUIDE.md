@@ -231,47 +231,56 @@ Where:
 
 ## Integration with Our Simulator Project
 
-### Current Pipeline
-Our simulator uses:
+### Current Pipeline (LDraw - Recommended)
+
+Our simulator now fully supports LDraw files:
+
 ```
-STEP files --> FreeCAD --> OBJ --> Blender --> GLB --> Ursina
+LDraw .dat parts → Blender (ExportLDraw) → GLB with vertex colors
+                                                    ↓
+LDraw .mpd/.ldr models ──────────────────→ Ursina renderer
 ```
 
-### Potential LDraw Integration
+### How It Works
 
-LDraw files could be useful for:
+1. **Part Conversion** (`tools/cad/blender_ldraw_to_glb_vertex_colors.py`)
+   - Converts all .dat part files to GLB
+   - Bakes vertex colors with color preservation logic:
+     - Color 16 (Main Color) → WHITE → takes MPD color
+     - All other colors → preserved as-is (rubber, buttons, labels)
 
-1. **Robot Assembly Reference**
-   - Teams can export their LDCad designs
-   - We can parse .ldr files to understand part placement
-   - Auto-generate simulator robots from LDCad models
+2. **Model Rendering** (`tools/cad/render_ldraw_model.py`)
+   - Parses .mpd/.ldr files
+   - Loads corresponding GLB parts
+   - Applies colors from MPD file
+   - Uses custom shader for headlight-style lighting
 
-2. **Parts Mapping**
-   - Create a mapping: LDraw part numbers --> GLB files
-   - Example: `228-2500-014.dat` --> `1x16_Beam.glb`
+### Usage
 
-3. **Export from LDCad**
-   - LDCad can export to various formats
-   - Could potentially export OBJ for our pipeline
-
-### Future Possibilities
-
-If we implement LDraw import:
-```python
-# Conceptual LDraw importer
-def load_ldr_file(filepath):
-    """Load a .ldr file and create simulator entities."""
-    parts = parse_ldr(filepath)
-    for part in parts:
-        part_number = part['filename']  # e.g., "228-2500-014.dat"
-        glb_file = PART_MAP.get(part_number)
-        if glb_file:
-            entity = Entity(
-                model=glb_file,
-                position=part['position'],
-                rotation=part['rotation']
-            )
+```bash
+# Render any LDCad model
+python tools/cad/render_ldraw_model.py models/your_robot.mpd
 ```
+
+### Color Preservation
+
+The system matches LDCad behavior exactly:
+- **Colorable areas** (color 16): Take the color specified in MPD
+- **Fixed colors**: Black rubber, motor buttons, labels stay their original color
+
+This means teams can:
+- Design in LDCad with any colors
+- Export .mpd file
+- Render directly in our simulator with correct colors
+
+### Alternative Pipeline (STEP)
+
+For parts not available in LDraw format:
+```
+STEP files → FreeCAD → OBJ → Blender → GLB → Ursina
+```
+
+See `docs/GLB_CONVERSION_PIPELINE.md` for STEP conversion details.
 
 ---
 
@@ -326,10 +335,11 @@ def load_ldr_file(filepath):
    - LDCad cannot directly import STEP files
    - VEX provides both formats separately
 
-5. **For our simulator:**
-   - We can potentially import .ldr files in the future
-   - Would need a part number --> GLB mapping
-   - Allows teams to design in LDCad, simulate in our tool
+5. **Our simulator fully supports LDraw:**
+   - Direct .mpd/.ldr import via `render_ldraw_model.py`
+   - Color preservation matches LDCad exactly
+   - Teams can design in LDCad, render directly in our simulator
+   - STEP pipeline still available for non-LDraw parts
 
 ---
 
