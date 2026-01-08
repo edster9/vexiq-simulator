@@ -84,3 +84,6 @@ models_compressed/
 
 # Temporary CAD extraction
 /tmp/
+
+# Miscellaneous
+temp.md

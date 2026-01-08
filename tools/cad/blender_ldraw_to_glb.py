@@ -18,8 +18,8 @@ LDRAW_LIBRARY = r"C:\Apps\VEXIQ_2018-01-19"
 INPUT_DIR = os.path.join(LDRAW_LIBRARY, "parts")
 OUTPUT_DIR = r"\\wsl$\Ubuntu-24.04\home\edster\projects\esahakian\vexiq\models\ldraw\glb"
 
-# Skip v2 variants and subpart files (we want main parts only)
-SKIP_PATTERNS = ['-v2', 's01', 's02', 's03', 's04', 's05']
+# No skip patterns - convert all parts including v2 variants
+SKIP_PATTERNS = []
 
 
 def should_skip(filename):
