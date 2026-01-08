@@ -46,8 +46,6 @@ in vec4 vertex_color;
 out vec4 fragColor;
 
 void main() {
-    vec4 tex_color = texture(p3d_Texture0, texcoord);
-
     vec3 n = normalize(view_normal);
 
     // Headlight: light from camera (0,0,1 in view space)
@@ -57,12 +55,15 @@ void main() {
     // Map to brightness: facing camera = 0.95, perpendicular = 0.825, away = 0.7
     float brightness = 0.7 + 0.25 * max(facing, 0.0);
 
-    // Simple multiply: vertex_color is a MASK
-    // White (1,1,1) = full entity color from MPD
-    // Black (0,0,0) = stays black (rubber)
-    vec4 base_color = p3d_ColorScale * vertex_color * tex_color;
+    // Check if vertex color is white (colorable) or has baked-in color
+    // White (>0.95 in all channels) = colorable, use entity.color
+    // Non-white = baked color from GLB, preserve it
+    float is_white = step(0.95, vertex_color.r) * step(0.95, vertex_color.g) * step(0.95, vertex_color.b);
 
-    fragColor = vec4(base_color.rgb * brightness, base_color.a);
+    // Mix: white areas get entity color, non-white areas keep baked color
+    vec3 base_color = mix(vertex_color.rgb, p3d_ColorScale.rgb, is_white);
+
+    fragColor = vec4(base_color * brightness, 1.0);
 }
 '''
 )

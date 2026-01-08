@@ -82,20 +82,21 @@ in vec4 vertex_color;
 out vec4 fragColor;
 
 void main() {
-    vec4 tex_color = texture(p3d_Texture0, texcoord);
-
     vec3 n = normalize(view_normal);
 
     // Headlight: light from camera (0,0,1 in view space)
     float facing = n.z;
     float brightness = 0.7 + 0.25 * max(facing, 0.0);
 
-    // Simple multiply: vertex_color is a MASK
-    // White (1,1,1) = full entity color from MPD
-    // Black (0,0,0) = stays black (rubber)
-    vec4 base_color = p3d_ColorScale * vertex_color * tex_color;
+    // Check if vertex color is white (colorable) or has baked-in color
+    // White (>0.95 in all channels) = colorable, use entity.color
+    // Non-white = baked color from GLB, preserve it
+    float is_white = step(0.95, vertex_color.r) * step(0.95, vertex_color.g) * step(0.95, vertex_color.b);
 
-    fragColor = vec4(base_color.rgb * brightness, base_color.a);
+    // Mix: white areas get entity color, non-white areas keep baked color
+    vec3 base_color = mix(vertex_color.rgb, p3d_ColorScale.rgb, is_white);
+
+    fragColor = vec4(base_color * brightness, 1.0);
 }
 '''
         )
@@ -254,10 +255,10 @@ class LDrawModelRenderer:
         # Convert to Ursina coordinates
         # LDraw: X=right, Y=down, Z=toward viewer
         # Ursina: X=right, Y=up, Z=forward
-        # So: negate Y, negate Z
+        # Only negate Y (the down->up flip)
         pos_x = world_x_ldu * POSITION_SCALE
         pos_y = -world_y_ldu * POSITION_SCALE  # Negate Y
-        pos_z = -world_z_ldu * POSITION_SCALE  # Negate Z
+        pos_z = world_z_ldu * POSITION_SCALE   # Z stays same
 
         # Get color
         color_code = part.color if part.color != 16 else parent_color
@@ -286,11 +287,11 @@ class LDrawModelRenderer:
             if not self.skip_rotation:
                 a, b_, c, d, e, f, g_, h, i = world_rotation
 
-                # Coordinate transform: C * M * C where C = diag(1, -1, -1)
-                # This transforms the rotation for LDraw->Ursina coordinate flip
-                a2, b2, c2 = a, -b_, -c
-                d2, e2, f2 = -d, e, f
-                g2, h2, i2 = -g_, h, i
+                # Coordinate transform: C * M * C where C = diag(1, -1, 1)
+                # This transforms the rotation for LDraw->Ursina Y-flip only
+                a2, b2, c2 = a, -b_, c
+                d2, e2, f2 = -d, e, -f
+                g2, h2, i2 = g_, -h, i
 
                 # Create Panda3D rotation matrix (column-major, so transposed)
                 mat = LMatrix4f(
