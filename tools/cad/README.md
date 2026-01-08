@@ -23,9 +23,9 @@ LDraw .mpd/.ldr models (positions, rotations, colors) ────┘
 | File | Purpose |
 |------|---------|
 | `blender_ldraw_to_glb_vertex_colors.py` | Batch convert .dat parts to GLB with color preservation |
-| `blender_ldraw_to_glb.py` | Batch convert .dat parts to plain GLB (no colors) |
 | `render_ldraw_model.py` | Render .mpd/.ldr models in Ursina |
 | `ldraw_parser.py` | Parse LDraw file format |
+| `ldraw_renderer.py` | Reusable LDraw model renderer for Ursina |
 | `normal_lighting_shader.py` | Custom shader for headlight-style lighting |
 
 ## Color Preservation Logic
@@ -57,7 +57,7 @@ The fragment shader detects white vertex colors:
 
 ```powershell
 # Delete existing GLBs to force reconversion
-Remove-Item models\ldraw_colored\*.glb
+Remove-Item models\parts\*.glb
 
 # Run Blender conversion
 blender --background --python tools/cad/blender_ldraw_to_glb_vertex_colors.py
@@ -75,7 +75,9 @@ python tools/cad/render_ldraw_model.py models/your_robot.mpd
 ```
 
 Options:
-- `--plain`: Use plain GLB models without vertex colors
+- `-v, --verbose`: Print verbose debug output
+- `--no-shader`: Disable custom shader (for debugging)
+- `--no-rotation`: Disable rotation matrix (for debugging)
 
 ## LDraw Color Codes
 
@@ -99,8 +101,7 @@ From LDConfig.ldr (normalized to 0-1):
 
 ```
 models/
-├── ldraw_colored/     # GLB parts with vertex colors (colorable + preserved)
-├── ldraw/glb/         # Plain GLB parts (no vertex colors)
+├── parts/             # GLB parts with vertex colors (colorable + preserved)
 ├── *.mpd              # Robot model files
 └── *.ldr              # Robot model files
 ```

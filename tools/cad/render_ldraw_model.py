@@ -34,11 +34,7 @@ except Exception as e:
     print(f"Warning: Could not change to project root: {e}")
 
 from ldraw_parser import parse_mpd
-from ldraw_renderer import (
-    LDrawModelRenderer,
-    GLB_PATH_COLORED,
-    GLB_PATH_PLAIN,
-)
+from ldraw_renderer import LDrawModelRenderer, GLB_PATH
 
 
 def main():
@@ -48,8 +44,6 @@ def main():
         description='Render an LDraw MPD/LDR model using Ursina and pre-converted GLB parts.'
     )
     parser.add_argument('model', help='Path to LDraw model file (.mpd or .ldr)')
-    parser.add_argument('--plain', action='store_true',
-                        help='Use plain/uncolored GLB models (smaller files)')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Print verbose debug output')
     parser.add_argument('--no-shader', action='store_true',
@@ -59,9 +53,7 @@ def main():
 
     args = parser.parse_args()
 
-    # Select GLB path based on flag
-    glb_path = GLB_PATH_PLAIN if args.plain else GLB_PATH_COLORED
-    print(f"Using {'plain' if args.plain else 'colored'} models from: {glb_path}")
+    print(f"Using parts from: {GLB_PATH}")
 
     model_path = Path(args.model)
 
@@ -108,7 +100,7 @@ def main():
 
     renderer = LDrawModelRenderer(
         doc,
-        glb_path=glb_path,
+        glb_path=GLB_PATH,
         project_root=PROJECT_ROOT,
         use_shader=not args.no_shader,
         skip_rotation=args.no_rotation,

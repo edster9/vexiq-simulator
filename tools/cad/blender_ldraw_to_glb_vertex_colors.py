@@ -13,7 +13,7 @@ Requires: ExportLDraw addon installed in Blender
           https://github.com/cuddlyogre/ExportLDraw
 
 Source: C:/Apps/VEXIQ_2018-01-19/parts/*.dat
-Output: WSL path models/ldraw_colored/
+Output: WSL path models/parts/
 """
 
 import bpy
@@ -23,7 +23,7 @@ from pathlib import Path
 # Settings
 LDRAW_LIBRARY = r"C:\Apps\VEXIQ_2018-01-19"
 INPUT_DIR = os.path.join(LDRAW_LIBRARY, "parts")
-OUTPUT_DIR = r"\\wsl$\Ubuntu-24.04\home\edster\projects\esahakian\vexiq\models\ldraw_colored"
+OUTPUT_DIR = r"\\wsl$\Ubuntu-24.04\home\edster\projects\esahakian\vexiq\models\parts"
 
 # No skip patterns - convert all parts including v2 variants
 SKIP_PATTERNS = []

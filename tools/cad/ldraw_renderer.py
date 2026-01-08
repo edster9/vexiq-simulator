@@ -32,9 +32,8 @@ from ldraw_parser import parse_mpd, LDrawDocument, LDRAW_COLORS
 MODEL_SCALE = 1.0      # Don't scale GLB models - use their native size
 POSITION_SCALE = 0.02  # Scale LDU positions to match GLB native scale
 
-# Default paths for GLB models (relative to project root)
-GLB_PATH_COLORED = 'models/ldraw_colored'  # Vertex colors baked in
-GLB_PATH_PLAIN = 'models/ldraw/glb'        # No colors (smaller files)
+# Default path for GLB models (relative to project root)
+GLB_PATH = 'models/parts'  # GLB parts with vertex colors baked in
 
 # =============================================================================
 # Shader (created lazily to avoid importing Ursina at module load)
@@ -160,7 +159,7 @@ class LDrawModelRenderer:
     IDENTITY_MATRIX = (1, 0, 0, 0, 1, 0, 0, 0, 1)
 
     def __init__(self, doc: LDrawDocument,
-                 glb_path: str = GLB_PATH_COLORED,
+                 glb_path: str = GLB_PATH,
                  project_root: Path = None,
                  parent = None,
                  use_shader: bool = True,
@@ -405,7 +404,7 @@ class LDrawModelRenderer:
 
 def render_ldraw_model(model_path: str,
                        parent = None,
-                       glb_path: str = GLB_PATH_COLORED,
+                       glb_path: str = GLB_PATH,
                        project_root: Path = None,
                        use_shader: bool = True,
                        verbose: bool = False) -> List:

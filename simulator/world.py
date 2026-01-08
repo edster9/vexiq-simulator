@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 import sys
 sys.path.insert(0, str(PROJECT_ROOT / 'tools' / 'cad'))
 from ldraw_parser import parse_mpd
-from ldraw_renderer import LDrawModelRenderer, GLB_PATH_COLORED
+from ldraw_renderer import LDrawModelRenderer, GLB_PATH
 
 
 class OrbitCamera:
@@ -421,7 +421,7 @@ class LDrawRobot(Entity):
         # First pass: render with no offset to calculate bounding box
         self.renderer = LDrawModelRenderer(
             doc,
-            glb_path=GLB_PATH_COLORED,
+            glb_path=GLB_PATH,
             project_root=PROJECT_ROOT,
             parent=self,
             use_shader=True,
