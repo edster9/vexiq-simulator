@@ -4,7 +4,18 @@ VEX IQ 3D World
 Ursina-based 3D world with VEX IQ field grid.
 """
 
+import os
+from pathlib import Path
 from ursina import *
+
+# Project root for model files
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Import LDraw renderer (adds tools/cad to path)
+import sys
+sys.path.insert(0, str(PROJECT_ROOT / 'tools' / 'cad'))
+from ldraw_parser import parse_mpd
+from ldraw_renderer import LDrawModelRenderer, GLB_PATH_COLORED
 
 
 class OrbitCamera:
@@ -351,6 +362,98 @@ class RobotPlaceholder(Entity):
             # Half dimensions minus robot size buffer
             bound_x = 3.8  # ~8/2 - 0.2 buffer
             bound_z = 2.8  # ~6/2 - 0.2 buffer
+            self.x = max(-bound_x, min(bound_x, self.x))
+            self.z = max(-bound_z, min(bound_z, self.z))
+
+
+class LDrawRobot(Entity):
+    """Robot loaded from LDraw MPD/LDR file.
+
+    Uses the shared LDrawModelRenderer for rendering, with the same
+    movement interface as RobotPlaceholder for simulation control.
+    """
+
+    def __init__(self, model_path: str = None, **kwargs):
+        super().__init__(**kwargs)
+
+        # Use default model if none specified
+        if model_path is None:
+            model_path = str(PROJECT_ROOT / 'models' / 'ClawbotIQ.mpd')
+
+        # Movement state (same as RobotPlaceholder)
+        self.velocity = Vec3(0, 0, 0)
+        self.angular_velocity = 0
+
+        # Renderer reference for stats
+        self.renderer = None
+
+        # Load the LDraw model using shared renderer
+        self.load_model(model_path)
+
+    def load_model(self, model_path: str):
+        """Load and render an LDraw MPD/LDR file."""
+        if not os.path.exists(model_path):
+            print(f"Warning: Model not found: {model_path}")
+            return
+
+        print(f"Loading LDraw model: {model_path}")
+        doc = parse_mpd(model_path)
+
+        if not doc.main_model:
+            print("Warning: No main model found in document")
+            return
+
+        # Use the shared renderer - parts are parented to this entity
+        self.renderer = LDrawModelRenderer(
+            doc,
+            glb_path=GLB_PATH_COLORED,
+            project_root=PROJECT_ROOT,
+            parent=self,
+            use_shader=True,
+            verbose=False
+        )
+        self.renderer.render()
+
+        print(f"Loaded {self.renderer.part_count} parts "
+              f"({len(self.renderer.missing_parts)} missing)")
+
+    @property
+    def part_count(self) -> int:
+        """Get number of loaded parts."""
+        return self.renderer.part_count if self.renderer else 0
+
+    @property
+    def missing_parts(self) -> set:
+        """Get set of missing part names."""
+        return self.renderer.missing_parts if self.renderer else set()
+
+    def set_drive(self, left_power: float, right_power: float):
+        """Set drive motor powers (-100 to 100)."""
+        forward = (left_power + right_power) / 200
+        turn = (left_power - right_power) / 200
+
+        speed = 2.0
+        turn_speed = 90
+
+        self.velocity = Vec3(0, 0, forward * speed)
+        self.angular_velocity = turn * turn_speed
+
+    def move(self, dt):
+        """Move robot based on current velocity."""
+        if self.velocity.length() > 0.001 or abs(self.angular_velocity) > 0.001:
+            rad = math.radians(self.rotation_y)
+            world_vel = Vec3(
+                self.velocity.z * math.sin(rad),
+                0,
+                self.velocity.z * math.cos(rad)
+            )
+
+            self.position += world_vel * dt
+            self.rotation_y += self.angular_velocity * dt
+
+            # Keep robot on field
+            bound_x = 3.8
+            bound_z = 2.8
             self.x = max(-bound_x, min(bound_x, self.x))
             self.z = max(-bound_z, min(bound_z, self.z))
 

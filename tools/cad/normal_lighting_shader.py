@@ -1,6 +1,10 @@
 """
-Custom shader: View-space lighting + vertex colors.
+Custom shader: View-space lighting + vertex colors with color preservation.
 Light comes from camera direction (headlight style) - consistent from any angle.
+
+Color logic:
+- White vertex color (1,1,1) = colorable area, uses entity.color from MPD
+- Any other vertex color = preserved as-is (buttons, labels, rubber, etc.)
 """
 
 from ursina import Shader
@@ -33,7 +37,7 @@ void main() {
 #version 140
 
 uniform sampler2D p3d_Texture0;
-uniform vec4 p3d_ColorScale;  // entity.color
+uniform vec4 p3d_ColorScale;  // entity.color from MPD
 
 in vec2 texcoord;
 in vec3 view_normal;
