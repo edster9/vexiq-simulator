@@ -27,6 +27,7 @@ LDraw .mpd/.ldr models (positions, rotations, colors) ────┘
 | `ldraw_parser.py` | Parse LDraw file format |
 | `ldraw_renderer.py` | Reusable LDraw model renderer for Ursina |
 | `normal_lighting_shader.py` | Custom shader for headlight-style lighting |
+| `generate_robot_def.py` | Generate robot definition files from MPD models |
 
 ## Color Preservation Logic
 
@@ -125,6 +126,55 @@ The custom shader provides:
 1. **Headlight-style lighting**: Light comes from camera direction, consistent from any angle
 2. **Normal-based shading**: Faces pointing at camera are brighter (0.95), away are darker (0.7)
 3. **Color preservation**: Non-white vertex colors are used directly; white areas take entity color
+
+## Generating Robot Definition Files
+
+The `generate_robot_def.py` tool creates a `.robotdef` YAML file that describes a robot's structure:
+
+```bash
+python tools/cad/generate_robot_def.py models/ClawbotIQ.mpd
+python tools/cad/generate_robot_def.py models/ClawbotIQ.mpd -v  # verbose
+python tools/cad/generate_robot_def.py models/ClawbotIQ.mpd -o custom.robotdef
+```
+
+### What it generates
+
+The tool parses an LDraw MPD file and produces:
+
+1. **Submodel hierarchy** - Parent/child relationships between parts (e.g., Arm → FingerA, FingerB)
+2. **Special part detection** - Automatically identifies:
+   - Wheels/tires (228-2500-208, 228-2500-209, etc.)
+   - Motors (228-2560)
+   - Brain (228-2540, 228-2540c02)
+   - Sensors (touch, color, gyro, distance, etc.)
+3. **Position data** - Where each submodel is placed
+4. **Kinematics placeholders** - Ready for manual configuration
+
+### Extending the definition
+
+After generation, manually fill in kinematics for articulated parts:
+
+```yaml
+Arm.ldr:
+  position: [80.0, -29.05, 18.242]
+  parent: ClawbotIQ.ldr
+  kinematics:
+    rotation_axis: [1, 0, 0]      # Rotates around X axis
+    rotation_origin: [0, 0, 0]    # Pivot point
+    rotation_limits: [-45, 90]    # Min/max degrees
+```
+
+Configure wheel roles for drivetrain simulation:
+
+```yaml
+wheels:
+  - submodel: LeftSideDrive.ldr
+    role: left_drive
+    diameter_mm: 44
+  - submodel: RightSideDrive.ldr
+    role: right_drive
+    diameter_mm: 44
+```
 
 ## Troubleshooting
 

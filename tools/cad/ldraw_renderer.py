@@ -21,7 +21,7 @@ Usage:
 
 import os
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # Import LDraw parser (doesn't depend on Ursina)
 from ldraw_parser import parse_mpd, LDrawDocument, LDRAW_COLORS
@@ -29,8 +29,8 @@ from ldraw_parser import parse_mpd, LDrawDocument, LDRAW_COLORS
 # =============================================================================
 # Scale Constants
 # =============================================================================
-MODEL_SCALE = 1.0      # Don't scale GLB models - use their native size
-POSITION_SCALE = 0.02  # Scale LDU positions to match GLB native scale
+MODEL_SCALE = 1.0      # Don't scale GLB models - they're exported at correct scale
+POSITION_SCALE = 0.02  # Scale LDU positions to match GLB scale (GLB is 0.02x LDU)
 
 # Default path for GLB models (relative to project root)
 GLB_PATH = 'models/parts'  # GLB parts with vertex colors baked in
@@ -182,6 +182,7 @@ class LDrawModelRenderer:
 
         # Tracking
         self.entities: List = []
+        self.entities_by_submodel: Dict[str, List] = {}  # Entities grouped by submodel name
         self.part_count = 0
         self.triangle_count = 0
         self.missing_parts = set()
@@ -215,8 +216,17 @@ class LDrawModelRenderer:
         return self.entities
 
     def _render_model(self, model_name: str, parent_color: int = 72,
-                      offset: tuple = (0, 0, 0), parent_rotation: tuple = None):
-        """Recursively render a model and its submodels."""
+                      offset: tuple = (0, 0, 0), parent_rotation: tuple = None,
+                      current_submodel: str = None):
+        """Recursively render a model and its submodels.
+
+        Args:
+            model_name: Name of the model to render
+            parent_color: Inherited color code (default 72 = VEX light gray)
+            offset: Position offset from parent (LDU)
+            parent_rotation: Rotation matrix from parent
+            current_submodel: Top-level submodel name for entity grouping
+        """
         if parent_rotation is None:
             parent_rotation = self.IDENTITY_MATRIX
 
@@ -227,12 +237,16 @@ class LDrawModelRenderer:
 
         model = self.doc.models[model_name]
 
+        # Track which submodel we're in (for entity grouping)
+        # If current_submodel is None, this model IS the top-level submodel
+        submodel_for_parts = current_submodel if current_submodel else model_name
+
         if self.verbose:
-            print(f"\nRendering model: {model_name}")
+            print(f"\nRendering model: {model_name} (submodel: {submodel_for_parts})")
             print(f"  Parts: {len(model.parts)}")
 
         for part in model.parts:
-            self._render_part(part, parent_color, offset, parent_rotation)
+            self._render_part(part, parent_color, offset, parent_rotation, submodel_for_parts)
 
         for submodel_name, placement in model.submodel_refs:
             composed_rotation = self._matrix_multiply(
@@ -246,11 +260,21 @@ class LDrawModelRenderer:
                 offset[2] + rotated_pos[2],
             )
             sub_color = placement.color if placement.color != 16 else parent_color
-            self._render_model(submodel_name, sub_color, sub_offset, composed_rotation)
+            # Pass submodel_name as the new current_submodel (so parts are grouped by their top-level submodel)
+            self._render_model(submodel_name, sub_color, sub_offset, composed_rotation, submodel_name)
 
     def _render_part(self, part, parent_color: int,
-                     offset: tuple, parent_rotation: tuple):
-        """Render a single part as an Ursina entity."""
+                     offset: tuple, parent_rotation: tuple,
+                     submodel_name: str = None):
+        """Render a single part as an Ursina entity.
+
+        Args:
+            part: The part to render
+            parent_color: Inherited color code
+            offset: Position offset from parent (LDU)
+            parent_rotation: Rotation matrix from parent
+            submodel_name: Name of the submodel this part belongs to (for grouping)
+        """
         from ursina import Entity, color
 
         glb_name = part.glb_name
@@ -291,7 +315,7 @@ class LDrawModelRenderer:
         pos_x = world_x_ldu * POSITION_SCALE
         pos_y = -world_y_ldu * POSITION_SCALE + self.y_offset  # Negate Y + offset
         pos_z = world_z_ldu * POSITION_SCALE   # Z stays same
-
+        
         # Get color
         color_code = part.color if part.color != 16 else parent_color
         r, g, b = self._get_color_rgb(color_code)
@@ -338,12 +362,24 @@ class LDrawModelRenderer:
                 entity.position = (pos_x, pos_y, pos_z)
                 entity.scale = MODEL_SCALE
 
+            # Store part number for filtering (e.g., wheel animation)
+            entity.part_number = part.part_name.replace('.dat', '').replace('.DAT', '')
+
+            # Store original rotation matrix for animation (we'll need this to add rotation)
+            entity.ldraw_rotation = world_rotation
+
             self.entities.append(entity)
             self.part_count += 1
             self.triangle_count += self._count_triangles(entity)
 
+            # Track entity by submodel name for animation
+            if submodel_name:
+                if submodel_name not in self.entities_by_submodel:
+                    self.entities_by_submodel[submodel_name] = []
+                self.entities_by_submodel[submodel_name].append(entity)
+
             if self.verbose:
-                print(f"  Part {self.part_count}: {glb_name}")
+                print(f"  Part {self.part_count}: {glb_name} (submodel: {submodel_name})")
                 print(f"    Position: ({pos_x:.2f}, {pos_y:.2f}, {pos_z:.2f})")
                 print(f"    Color: ({r:.2f}, {g:.2f}, {b:.2f})")
                 print(f"    Visible: {entity.visible}, Enabled: {entity.enabled}")

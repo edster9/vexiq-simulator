@@ -4,6 +4,7 @@ VEX IQ 3D World
 Ursina-based 3D world with VEX IQ field grid.
 """
 
+import math
 import os
 from pathlib import Path
 from ursina import *
@@ -11,11 +12,12 @@ from ursina import *
 # Project root for model files
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Import LDraw renderer (adds tools/cad to path)
+# Import LDraw renderer and robotdef loader (adds tools/cad to path)
 import sys
 sys.path.insert(0, str(PROJECT_ROOT / 'tools' / 'cad'))
 from ldraw_parser import parse_mpd
-from ldraw_renderer import LDrawModelRenderer, GLB_PATH
+from ldraw_renderer import LDrawModelRenderer, GLB_PATH, POSITION_SCALE
+from robotdef_loader import load_robotdef, find_robotdef_for_model, RobotDef
 
 
 class OrbitCamera:
@@ -396,6 +398,22 @@ class LDrawRobot(Entity):
         # Renderer reference for stats
         self.renderer = None
 
+        # Robot definition (loaded from .robotdef file)
+        self.robotdef: RobotDef = None
+
+        # Drivetrain rotation center offset (in robot's local scaled coordinates)
+        # This is where the robot pivots when turning
+        self._rotation_center_offset = Vec3(0, 0, 0)
+
+        # Wheel rotation tracking for animation
+        self._left_wheel_rotation = 0.0  # degrees
+        self._right_wheel_rotation = 0.0  # degrees
+        self._left_wheel_speed = 0.0  # degrees per second
+        self._right_wheel_speed = 0.0  # degrees per second
+        self._wheel_entities_left = []
+        self._wheel_entities_right = []
+        self._wheel_original_mats = {}  # Original transformation matrices for wheels
+
         # Load the LDraw model using shared renderer
         self.load_model(model_path)
 
@@ -418,65 +436,229 @@ class LDrawRobot(Entity):
             print("Warning: No main model found in document")
             return
 
-        # First pass: render with no offset to calculate bounding box
+        # Load robot definition file if it exists
+        robotdef_path = find_robotdef_for_model(model_path)
+        if robotdef_path:
+            try:
+                self.robotdef = load_robotdef(robotdef_path)
+                print(f"Loaded robot definition: {robotdef_path}")
+                print(f"  Drivetrain type: {self.robotdef.drivetrain.type}")
+                print(f"  Rotation center (LDU): {self.robotdef.drivetrain.rotation_center}")
+            except Exception as e:
+                print(f"Warning: Could not load robot definition: {e}")
+                self.robotdef = None
+        else:
+            print(f"No robot definition found for {model_path}")
+
+        # Calculate y_offset based on wheel radius from robotdef
+        # This positions the robot so wheels touch the ground
+        y_offset = self._calculate_ground_offset()
+        print(f"  Ground offset from wheel radius: {y_offset}")
+
+        # Render with the calculated y_offset
         self.renderer = LDrawModelRenderer(
             doc,
             glb_path=GLB_PATH,
             project_root=PROJECT_ROOT,
             parent=self,
             use_shader=True,
-            y_offset=0,
+            y_offset=y_offset,
             verbose=False
         )
         self.renderer.render()
 
-        # Calculate min_y from rendered entities to position robot on ground
-        min_y = self._calculate_min_y()
+        # Find actual min Y after rendering and adjust all entities directly
+        # (self.y adjustment doesn't work - must move each entity individually)
+        min_y_with_bounds = float('inf')
+        for entity in self.renderer.entities:
+            try:
+                if hasattr(entity, 'model') and entity.model:
+                    bounds = entity.model.getTightBounds()
+                    if bounds:
+                        model_min_y = bounds[0].y * entity.scale_y
+                        world_min_y = entity.y + model_min_y
+                        min_y_with_bounds = min(min_y_with_bounds, world_min_y)
+            except:
+                pass
 
-        # Apply offset to bring bottom to Y=0
-        if min_y != 0:
-            # Clear first render and re-render with ground offset
+        # Adjust all entity positions to place robot on ground (Y=0)
+        if min_y_with_bounds != float('inf'):
+            adjustment = -min_y_with_bounds
             for entity in self.renderer.entities:
-                entity.enabled = False
-                destroy(entity)
-            self.renderer.entities.clear()
-            self.renderer.part_count = 0
+                entity.y += adjustment
+            print(f"  Ground adjustment: +{adjustment:.3f} (lowest point was at {min_y_with_bounds:.3f})")
 
-            self.renderer.y_offset = min_y  # Shift to place bottom at Y=0
-            self.renderer.render()
+            # Verify: re-check min Y after adjustment
+            new_min_y = float('inf')
+            for entity in self.renderer.entities:
+                try:
+                    if hasattr(entity, 'model') and entity.model:
+                        bounds = entity.model.getTightBounds()
+                        if bounds:
+                            model_min_y = bounds[0].y * entity.scale_y
+                            local_min_y = entity.y + model_min_y
+                            new_min_y = min(new_min_y, local_min_y)
+                except:
+                    pass
+            print(f"  After adjustment: lowest point local Y = {new_min_y:.3f}")
+
+        # Calculate rotation center offset from robotdef
+        self._calculate_rotation_center()
 
         print(f"Loaded {self.renderer.part_count} parts "
               f"({len(self.renderer.missing_parts)} missing)")
+        if self.renderer.entities_by_submodel:
+            print(f"  Submodels: {list(self.renderer.entities_by_submodel.keys())}")
 
-    def _calculate_min_y(self):
-        """Calculate the minimum Y position of all parts."""
-        if not self.renderer or not self.renderer.entities:
-            return 0
+        # Find wheel entities for animation
+        self._find_wheel_entities()
 
-        min_y = float('inf')
-        for entity in self.renderer.entities:
-            # Get entity position (in renderer's local space)
-            local_y = entity.y
+    def _calculate_ground_offset(self) -> float:
+        """Calculate y_offset to position robot on the ground based on wheel radius.
 
-            # Try to get model bounds
-            if hasattr(entity, 'model') and entity.model:
-                try:
-                    bounds = entity.model.getTightBounds()
-                    if bounds:
-                        # Add model's local min to entity position
-                        min_y = min(min_y, local_y + bounds[0].y)
-                        continue
-                except:
-                    pass
+        Uses wheel_diameter from robotdef, or defaults to 44mm (VEX IQ standard).
+        The drivetrain rotation center Y coordinate tells us where the axle is,
+        and we offset by wheel radius to place wheels on ground.
 
-            min_y = min(min_y, local_y)
+        Returns:
+            Y offset in renderer coordinate space (POSITION_SCALE units)
+        """
+        # Get wheel diameter (mm) - default to 44mm VEX IQ wheel
+        wheel_diameter_mm = 44.0
+        if self.robotdef:
+            wheel_diameter_mm = self.robotdef.drivetrain.wheel_diameter or 44.0
 
-        return min_y if min_y != float('inf') else 0
+        # Calculate wheel radius in LDU (1 LDU = 0.4mm)
+        wheel_radius_ldu = (wheel_diameter_mm / 2.0) / 0.4
+
+        # Get drivetrain Y position in LDU (where the axle is)
+        axle_y_ldu = 0
+        if self.robotdef:
+            axle_y_ldu = self.robotdef.drivetrain.rotation_center[1]
+
+        # In LDraw: Y is down, so higher Y values are lower in space
+        # The wheel bottom is at axle_y + radius (further "down" in LDraw)
+        # We want this point to be at Y=0 in Ursina (on the ground)
+        #
+        # After Y-flip: ursina_y = -ldraw_y * POSITION_SCALE + y_offset
+        # For wheel bottom (ldraw_y = axle_y + radius), we want ursina_y = 0
+        # 0 = -(axle_y + radius) * POSITION_SCALE + y_offset
+        # y_offset = (axle_y + radius) * POSITION_SCALE
+
+        y_offset = (axle_y_ldu + wheel_radius_ldu) * POSITION_SCALE
+
+        print(f"  Wheel diameter: {wheel_diameter_mm}mm, radius: {wheel_radius_ldu} LDU")
+        print(f"  Axle Y (LDU): {axle_y_ldu}")
+
+        return y_offset
+
+    def _calculate_rotation_center(self):
+        """Calculate the drivetrain rotation center offset in local robot coordinates."""
+        if not self.robotdef:
+            self._rotation_center_offset = Vec3(0, 0, 0)
+            return
+
+        # Get rotation center in LDU from robotdef
+        ldu = self.robotdef.drivetrain.rotation_center
+
+        # Convert to Ursina coordinates (apply POSITION_SCALE, negate Y)
+        # Then apply y_offset used during rendering
+        y_offset = self.renderer.y_offset if self.renderer else 0
+        self._rotation_center_offset = Vec3(
+            ldu[0] * POSITION_SCALE,
+            -ldu[1] * POSITION_SCALE + y_offset,
+            ldu[2] * POSITION_SCALE
+        )
+        print(f"  Rotation center offset: {self._rotation_center_offset}")
+
+    def _find_wheel_entities(self):
+        """Find wheel entities from left and right drive submodels for animation."""
+        self._wheel_entities_left = []
+        self._wheel_entities_right = []
+        self._wheel_original_mats = {}  # Store original transformation matrices
+
+        if not self.renderer or not self.robotdef:
+            print("  WARNING: No renderer or robotdef for wheel detection")
+            return
+
+        # Get drive submodel names from robotdef
+        left_name = self.robotdef.drivetrain.left_drive
+        right_name = self.robotdef.drivetrain.right_drive
+        print(f"  Drive submodels: left={left_name}, right={right_name}")
+
+        # Debug: Check what submodels have special_parts
+        for sm_name, sm_config in self.robotdef.submodels.items():
+            if sm_config.special_parts:
+                print(f"    Submodel {sm_name} has {len(sm_config.special_parts)} special_parts")
+
+        # Get wheel part numbers from robotdef (extracted from special_parts)
+        left_wheel_parts = self.robotdef.get_wheel_part_numbers_for_submodel(left_name) if left_name else set()
+        right_wheel_parts = self.robotdef.get_wheel_part_numbers_for_submodel(right_name) if right_name else set()
+        print(f"  Wheel part numbers: left={left_wheel_parts}, right={right_wheel_parts}")
+
+        if left_name and left_name in self.renderer.entities_by_submodel:
+            all_entities = self.renderer.entities_by_submodel[left_name]
+            # Debug: show part numbers of entities
+            entity_parts = [e.part_number for e in all_entities if hasattr(e, 'part_number')]
+            print(f"  Left submodel entity part numbers: {entity_parts}")
+
+            self._wheel_entities_left = [
+                e for e in all_entities
+                if hasattr(e, 'part_number') and e.part_number in left_wheel_parts
+            ]
+            print(f"  Left wheel entities: {len(self._wheel_entities_left)} (of {len(all_entities)} in submodel)")
+
+            # Store original transformation matrices
+            for entity in self._wheel_entities_left:
+                self._wheel_original_mats[id(entity)] = entity.getMat()
+        else:
+            print(f"  WARNING: Left drive '{left_name}' not in entities_by_submodel")
+            print(f"    Available submodels: {list(self.renderer.entities_by_submodel.keys())}")
+
+        if right_name and right_name in self.renderer.entities_by_submodel:
+            all_entities = self.renderer.entities_by_submodel[right_name]
+            # Debug: show part numbers of entities
+            entity_parts = [e.part_number for e in all_entities if hasattr(e, 'part_number')]
+            print(f"  Right submodel entity part numbers: {entity_parts}")
+
+            self._wheel_entities_right = [
+                e for e in all_entities
+                if hasattr(e, 'part_number') and e.part_number in right_wheel_parts
+            ]
+            print(f"  Right wheel entities: {len(self._wheel_entities_right)} (of {len(all_entities)} in submodel)")
+
+            # Store original transformation matrices
+            for entity in self._wheel_entities_right:
+                self._wheel_original_mats[id(entity)] = entity.getMat()
+        else:
+            print(f"  WARNING: Right drive '{right_name}' not in entities_by_submodel")
+            print(f"    Available submodels: {list(self.renderer.entities_by_submodel.keys())}")
 
     def _position_on_ground(self):
         """Position robot so wheels sit on ground (Y=0)."""
-        # Position is now handled by y_offset in renderer
-        pass
+        if not self.renderer or not self.renderer.entities:
+            return
+
+        # Find lowest world Y position among all entities
+        min_world_y = float('inf')
+        for entity in self.renderer.entities:
+            try:
+                if hasattr(entity, 'model') and entity.model:
+                    bounds = entity.model.getTightBounds()
+                    if bounds:
+                        # Get entity's world position and add model bounds
+                        model_min_y = bounds[0].y * entity.world_scale_y
+                        world_min_y = entity.world_y + model_min_y
+                        min_world_y = min(min_world_y, world_min_y)
+            except:
+                pass
+
+        print(f"  World min Y after scaling: {min_world_y:.4f}")
+
+        # Move robot up so lowest point is at Y=0
+        if min_world_y != float('inf') and abs(min_world_y) > 0.001:
+            self.y -= min_world_y
+            print(f"  Adjusted robot.y by {-min_world_y:.4f} to {self.y:.4f}")
 
     @property
     def part_count(self) -> int:
@@ -500,24 +682,110 @@ class LDrawRobot(Entity):
         self.velocity = Vec3(0, 0, -forward * speed)
         self.angular_velocity = turn * turn_speed
 
-    def move(self, dt):
-        """Move robot based on current velocity."""
-        if self.velocity.length() > 0.001 or abs(self.angular_velocity) > 0.001:
-            rad = math.radians(self.rotation_y)
-            world_vel = Vec3(
-                self.velocity.z * math.sin(rad),
-                0,
-                self.velocity.z * math.cos(rad)
-            )
+        # Store individual wheel speeds for animation
+        # Left wheel rotates based on left_power, right based on right_power
+        self._left_wheel_speed = left_power / 100.0 * 360  # degrees per second at full power
+        self._right_wheel_speed = right_power / 100.0 * 360
 
-            self.position += world_vel * dt
+    def move(self, dt):
+        """Move robot based on current velocity.
+
+        The robot rotates around its drivetrain center (defined in .robotdef)
+        rather than the entity origin. This makes turning more realistic.
+        """
+        if self.velocity.length() > 0.001 or abs(self.angular_velocity) > 0.001:
+            # Get current heading in radians
+            rad = math.radians(self.rotation_y)
+            cos_r, sin_r = math.cos(rad), math.sin(rad)
+
+            # Calculate rotation center offset in world space (rotated by current heading)
+            # Scale offset by entity scale since it's in local coordinates
+            offset = self._rotation_center_offset * self.scale
+            offset_world_x = offset.x * cos_r - offset.z * sin_r
+            offset_world_z = offset.x * sin_r + offset.z * cos_r
+
+            # World position of the drivetrain rotation center
+            pivot_world_x = self.x + offset_world_x
+            pivot_world_z = self.z + offset_world_z
+
+            # Calculate forward velocity in world space
+            forward_world_x = self.velocity.z * sin_r
+            forward_world_z = self.velocity.z * cos_r
+
+            # Move the pivot point forward
+            pivot_world_x += forward_world_x * dt
+            pivot_world_z += forward_world_z * dt
+
+            # Apply rotation
+            old_rotation = self.rotation_y
             self.rotation_y += self.angular_velocity * dt
+
+            # Calculate new offset in world space with new heading
+            rad_new = math.radians(self.rotation_y)
+            cos_new, sin_new = math.cos(rad_new), math.sin(rad_new)
+            new_offset_world_x = offset.x * cos_new - offset.z * sin_new
+            new_offset_world_z = offset.x * sin_new + offset.z * cos_new
+
+            # Set entity position so rotation center stays at pivot point
+            self.x = pivot_world_x - new_offset_world_x
+            self.z = pivot_world_z - new_offset_world_z
 
             # Keep robot on field
             bound_x = 3.8
             bound_z = 2.8
             self.x = max(-bound_x, min(bound_x, self.x))
             self.z = max(-bound_z, min(bound_z, self.z))
+
+        # TODO: Wheel animation disabled - needs better approach (possibly Bullet physics)
+        # self._animate_wheels(dt)
+
+    def _animate_wheels(self, dt):
+        """Animate wheel rotation based on motor speeds.
+
+        Wheels rotate around their local Y axis (the axle in the wheel's model space).
+        We compose a spin rotation with the original LDraw transformation matrix.
+        """
+        from panda3d.core import LMatrix4f
+
+        # Update rotation accumulators
+        self._left_wheel_rotation += self._left_wheel_speed * dt
+        self._right_wheel_rotation += self._right_wheel_speed * dt
+
+        # Keep rotation in reasonable range
+        self._left_wheel_rotation %= 360
+        self._right_wheel_rotation %= 360
+
+        def apply_wheel_spin(entity, spin_degrees):
+            """Apply spin rotation to a wheel entity."""
+            orig_mat = self._wheel_original_mats.get(id(entity))
+            if orig_mat is None:
+                return
+
+            # Create a rotation matrix around the Y axis (wheel's local axle)
+            # VEX IQ wheels are modeled with axle along Y
+            spin_rad = math.radians(spin_degrees)
+            cos_s, sin_s = math.cos(spin_rad), math.sin(spin_rad)
+
+            # Rotation around Y axis
+            spin_mat = LMatrix4f(
+                cos_s, 0, -sin_s, 0,
+                0, 1, 0, 0,
+                sin_s, 0, cos_s, 0,
+                0, 0, 0, 1
+            )
+
+            # Compose: apply spin first (in model space), then original transform
+            combined = spin_mat * orig_mat
+            entity.setMat(combined)
+
+        # Apply rotation to wheel entities
+        for entity in self._wheel_entities_left:
+            # Left wheels spin forward when power is positive
+            apply_wheel_spin(entity, self._left_wheel_rotation)
+
+        for entity in self._wheel_entities_right:
+            # Right wheels spin in the opposite direction (mirrored)
+            apply_wheel_spin(entity, -self._right_wheel_rotation)
 
 
 class VexWorld:

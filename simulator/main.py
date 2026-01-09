@@ -136,7 +136,8 @@ class VexSimulator:
 
         # Performance optimizations
         from panda3d.core import loadPrcFileData, ClockObject
-        loadPrcFileData('', 'show-frame-rate-meter 0')
+        loadPrcFileData('', 'show-frame-rate-meter 1')  # Show FPS for debugging
+        loadPrcFileData('', 'sync-video 0')  # Disable vsync at Panda3D level
         loadPrcFileData('', 'texture-minfilter linear')
         loadPrcFileData('', 'texture-magfilter linear')
         loadPrcFileData('', 'gl-check-errors #f')  # Disable GL error checking
@@ -156,11 +157,11 @@ class VexSimulator:
         from ursina import application
         application.asset_folder = PROJECT_ROOT
 
-        # Limit frame rate to 60 FPS to reduce CPU usage
+        # Limit frame rate to 30 FPS to reduce CPU/GPU usage
         from panda3d.core import ClockObject
         globalClock = ClockObject.getGlobalClock()
         globalClock.setMode(ClockObject.MLimited)
-        globalClock.setFrameRate(60)
+        globalClock.setFrameRate(30)
 
         # Set dark background color for the window
         window.color = color.dark_gray

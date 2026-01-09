@@ -76,7 +76,13 @@ def main():
 
     # Initialize Ursina AFTER setting cwd
     from ursina import Ursina, Entity, Text, color, EditorCamera, camera
-    app = Ursina()
+    app = Ursina(vsync=False)
+
+    # Limit frame rate to 30 FPS to reduce CPU/GPU usage
+    from panda3d.core import ClockObject
+    globalClock = ClockObject.getGlobalClock()
+    globalClock.setMode(ClockObject.MLimited)
+    globalClock.setFrameRate(30)
 
     # Set asset folder to project root so relative model paths work
     # Do this IMMEDIATELY after Ursina init
