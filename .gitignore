@@ -71,6 +71,11 @@ htmlcov/
 # Logs
 *.log
 logs/
+last_run.log
+
+# C++ client build directories
+client/build-linux/
+client/build-windows/
 
 # 3D Models (large CAD files - STEP, OBJ, GLB)
 models/
