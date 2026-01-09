@@ -32,6 +32,7 @@ set(SOURCES
     src/render/debug.cpp
     src/scene/scene.cpp
     src/physics/drivetrain.cpp
+    src/physics/robotdef.cpp
     src/ipc/subprocess.cpp
     src/ipc/gamepad.cpp
     src/ipc/python_bridge.cpp

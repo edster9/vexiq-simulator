@@ -46,6 +46,22 @@ WHEEL_PARTS = {
     '228-2500-231': 'tread_link',  # Tank tread
 }
 
+# Patterns that indicate drive submodels (case-insensitive)
+DRIVE_SUBMODEL_PATTERNS = [
+    r'wheel.*left',
+    r'wheel.*right',
+    r'left.*wheel',
+    r'right.*wheel',
+    r'left.*drive',
+    r'right.*drive',
+    r'drive.*left',
+    r'drive.*right',
+    r'wheelsleft',
+    r'wheelsright',
+    r'leftdrive',
+    r'rightdrive',
+]
+
 # Part numbers that are motors
 MOTOR_PARTS = {
     '228-2560': 'smart_motor',
@@ -100,6 +116,31 @@ class SubmodelInfo:
     sensor_count: int = 0
     has_brain: bool = False
 
+    # Drive detection
+    is_drive_submodel: bool = False  # Detected as drive by naming pattern
+    drive_side: Optional[str] = None  # 'left', 'right', or None
+
+
+def detect_drive_submodel(name: str) -> Tuple[bool, Optional[str]]:
+    """Detect if a submodel is a drive submodel based on naming patterns.
+
+    Returns:
+        Tuple of (is_drive, side) where side is 'left', 'right', or None
+    """
+    name_lower = name.lower()
+
+    for pattern in DRIVE_SUBMODEL_PATTERNS:
+        if re.search(pattern, name_lower):
+            # Determine side
+            if 'left' in name_lower:
+                return True, 'left'
+            elif 'right' in name_lower:
+                return True, 'right'
+            else:
+                return True, None
+
+    return False, None
+
 
 def classify_part(part_number: str) -> Optional[str]:
     """Classify a part number into a category."""
@@ -127,7 +168,12 @@ def analyze_model(doc: LDrawDocument) -> Dict[str, SubmodelInfo]:
 
     # First pass: create SubmodelInfo for each model
     for name, model in doc.models.items():
-        submodels[name] = SubmodelInfo(name=name)
+        info = SubmodelInfo(name=name)
+        # Check if this is a drive submodel based on naming
+        is_drive, side = detect_drive_submodel(name)
+        info.is_drive_submodel = is_drive
+        info.drive_side = side
+        submodels[name] = info
 
     # Second pass: analyze parts and build hierarchy
     for name, model in doc.models.items():
@@ -272,53 +318,59 @@ def generate_yaml(doc: LDrawDocument, submodels: Dict[str, SubmodelInfo]) -> str
     lines.append("# Defines the robot's rotation center and drive geometry")
     lines.append("drivetrain:")
 
+    # Method 1: Look for drive submodels by naming pattern (e.g., wheelsleft.ldr, wheelsright.ldr)
+    drive_submodels = [(name, info) for name, info in submodels.items() if info.is_drive_submodel]
+
+    # Method 2: Fallback to wheel part detection
     wheel_submodels = [(name, info) for name, info in submodels.items() if info.wheel_count > 0]
 
-    if len(wheel_submodels) >= 2:
-        # Try to identify left/right by name or X position
-        left_drive = None
-        right_drive = None
+    # Use whichever method found candidates
+    candidates = drive_submodels if drive_submodels else wheel_submodels
+    detection_method = "naming pattern" if drive_submodels else "wheel parts"
 
-        for name, info in wheel_submodels:
-            name_lower = name.lower()
-            if 'left' in name_lower:
+    left_drive = None
+    right_drive = None
+
+    if len(candidates) >= 2:
+        # Try to identify left/right by name or X position
+        for name, info in candidates:
+            if info.drive_side == 'left' or 'left' in name.lower():
                 left_drive = (name, info)
-            elif 'right' in name_lower:
+            elif info.drive_side == 'right' or 'right' in name.lower():
                 right_drive = (name, info)
 
         # Fallback: use X position to determine left/right
+        # In LDraw coords, positive X is typically left
         if not left_drive or not right_drive:
-            sorted_by_x = sorted(wheel_submodels, key=lambda x: x[1].position[0])
+            sorted_by_x = sorted(candidates, key=lambda x: x[1].position[0], reverse=True)
             if len(sorted_by_x) >= 2:
-                left_drive = sorted_by_x[0]  # Smaller X = left
-                right_drive = sorted_by_x[-1]  # Larger X = right
+                left_drive = sorted_by_x[0]  # Larger X = left (LDraw convention)
+                right_drive = sorted_by_x[-1]  # Smaller X = right
 
-        if left_drive and right_drive:
-            left_pos = left_drive[1].position
-            right_pos = right_drive[1].position
+    if left_drive and right_drive:
+        left_pos = left_drive[1].position
+        right_pos = right_drive[1].position
 
-            # Calculate center point (rotation axis)
-            center_x = (left_pos[0] + right_pos[0]) / 2
-            center_y = (left_pos[1] + right_pos[1]) / 2
-            center_z = (left_pos[2] + right_pos[2]) / 2
+        # Calculate center point (rotation axis)
+        center_x = (left_pos[0] + right_pos[0]) / 2
+        center_y = (left_pos[1] + right_pos[1]) / 2
+        center_z = (left_pos[2] + right_pos[2]) / 2
 
-            # Track width = distance between left and right wheels (X axis)
-            track_width = abs(right_pos[0] - left_pos[0])
+        # Track width = distance between left and right wheels (X axis)
+        track_width = abs(right_pos[0] - left_pos[0])
 
-            lines.append(f"  type: tank  # tank (skid-steer) | mecanum | omni | ackermann")
-            lines.append(f"  left_drive: {left_drive[0]}")
-            lines.append(f"  right_drive: {right_drive[0]}")
-            lines.append(f"  # Rotation center (midpoint between drive assemblies)")
-            lines.append(f"  rotation_center: [{center_x}, {center_y}, {center_z}]")
-            lines.append(f"  track_width: {track_width}  # Distance between left and right wheels (LDU)")
-            lines.append(f"  # wheel_diameter: 44  # mm - set based on wheel type used")
-        else:
-            lines.append("  type: unknown")
-            lines.append("  # Could not auto-detect left/right drives")
-            lines.append("  rotation_center: [0, 0, 0]  # Fill in manually")
+        lines.append(f"  type: tank  # tank (skid-steer) | mecanum | omni | ackermann")
+        lines.append(f"  left_drive: {left_drive[0]}")
+        lines.append(f"  right_drive: {right_drive[0]}")
+        lines.append(f"  # Rotation center (midpoint between drive assemblies)")
+        lines.append(f"  # Detected via {detection_method}")
+        lines.append(f"  rotation_center: [{center_x}, {center_y}, {center_z}]")
+        lines.append(f"  track_width: {track_width}  # Distance between left and right wheels (LDU)")
+        lines.append(f"  # wheel_diameter: 44  # mm - set based on wheel type used")
     else:
         lines.append("  type: unknown")
-        lines.append("  # Less than 2 wheel submodels detected")
+        lines.append("  # Could not auto-detect left/right drives")
+        lines.append("  # No wheel parts found and no drive submodels detected by name")
         lines.append("  rotation_center: [0, 0, 0]  # Fill in manually")
 
     lines.append("")
@@ -467,17 +519,20 @@ def main():
         for name, info in submodels.items():
             parent = info.parent or "(root)"
             print(f"  {name} <- {parent}")
-            if info.wheel_count or info.motor_count or info.sensor_count or info.has_brain:
-                parts = []
-                if info.wheel_count:
-                    parts.append(f"{info.wheel_count} wheels")
-                if info.motor_count:
-                    parts.append(f"{info.motor_count} motors")
-                if info.sensor_count:
-                    parts.append(f"{info.sensor_count} sensors")
-                if info.has_brain:
-                    parts.append("brain")
-                print(f"    Contains: {', '.join(parts)}")
+            features = []
+            if info.is_drive_submodel:
+                side = info.drive_side or "unknown"
+                features.append(f"DRIVE ({side})")
+            if info.wheel_count:
+                features.append(f"{info.wheel_count} wheels")
+            if info.motor_count:
+                features.append(f"{info.motor_count} motors")
+            if info.sensor_count:
+                features.append(f"{info.sensor_count} sensors")
+            if info.has_brain:
+                features.append("brain")
+            if features:
+                print(f"    Contains: {', '.join(features)}")
 
     # Generate YAML
     yaml_content = generate_yaml(doc, submodels)

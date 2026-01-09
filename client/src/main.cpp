@@ -76,6 +76,7 @@
 #include "render/debug.h"
 #include "scene/scene.h"
 #include "physics/drivetrain.h"
+#include "physics/robotdef.h"
 #include "ipc/gamepad.h"
 #include "ipc/python_bridge.h"
 
@@ -289,6 +290,12 @@ struct RobotInstance {
     float offset[3];      // World position offset (inches)
     float rotation_y;     // Rotation around Y axis (radians)
     float ground_offset;  // Computed ground offset for this robot
+    Drivetrain drivetrain; // Physics drivetrain for this robot
+
+    // From robotdef
+    float rotation_center[3];  // Drivetrain center in LDU (converted to world coords for rotation)
+    float track_width;         // Track width in LDU
+    bool has_robotdef;         // Whether robotdef was loaded
 };
 
 // Part instance for rendering
@@ -371,50 +378,77 @@ static Mat4 build_ldraw_model_matrix(const float* pos, const float* rot, const R
     float d = rot[3], e = rot[4], f = rot[5];
     float g = rot[6], h = rot[7], i = rot[8];
 
+    // Part position in LDU (LDraw coordinates)
+    float px = pos[0];
+    float py = pos[1];
+    float pz = pos[2];
+
+    // Apply robot rotation if present (in LDraw space, before coordinate conversion)
+    if (robot) {
+        // Rotation center in LDU
+        float pivot_x = robot->rotation_center[0];
+        float pivot_y = robot->rotation_center[1];
+        float pivot_z = robot->rotation_center[2];
+
+        // Part position relative to pivot (in LDU)
+        float rel_x = px - pivot_x;
+        float rel_y = py - pivot_y;
+        float rel_z = pz - pivot_z;
+
+        // Rotate around Y axis in LDraw space
+        // Note: In LDraw, Y is down, so rotation around Y is still around the vertical axis
+        // But the rotation direction might be inverted relative to OpenGL
+        float cos_r = cosf(robot->rotation_y);
+        float sin_r = sinf(robot->rotation_y);
+
+        // Rotate position (in LDraw XZ plane)
+        // Using Ry_ldraw: [cos 0 -sin; 0 1 0; sin 0 cos]
+        float rx = rel_x * cos_r - rel_z * sin_r;
+        float rz = rel_x * sin_r + rel_z * cos_r;
+
+        // Update position relative to pivot
+        px = rx + pivot_x;
+        py = rel_y + pivot_y;
+        pz = rz + pivot_z;
+
+        // Rotate the orientation matrix (left-multiply by Ry in LDraw space)
+        // Ry_ldraw = [cos 0 -sin; 0 1 0; sin 0 cos] (note: different from OpenGL Ry)
+        // Because in LDraw, Z points back, so positive rotation is opposite
+        float na = cos_r * a - sin_r * g;
+        float nb = cos_r * b - sin_r * h;
+        float nc = cos_r * c - sin_r * i;
+        float ng = sin_r * a + cos_r * g;
+        float nh = sin_r * b + cos_r * h;
+        float ni = sin_r * c + cos_r * i;
+        a = na; b = nb; c = nc;
+        g = ng; h = nh; i = ni;
+        // d, e, f unchanged (Y row doesn't change for Y-axis rotation)
+    }
+
+    // Now convert from LDraw to OpenGL coordinates
     // LDraw: Y-down, Z-back; OpenGL: Y-up, Z-front
     // Apply coordinate change: C * M * C where C = diag(1, -1, -1)
-    // This flips both Y and Z axes
     float a2 = a,  b2 = -b, c2 = -c;
     float d2 = -d, e2 = e,  f2 = f;
     float g2 = -g, h2 = h,  i2 = i;
 
-    // Convert LDraw position to world position
-    float wx = pos[0] * LDU_SCALE;
-    float wy = -pos[1] * LDU_SCALE;
-    float wz = -pos[2] * LDU_SCALE;
+    // Convert position to OpenGL coordinates
+    float wx = px * LDU_SCALE;
+    float wy = -py * LDU_SCALE;
+    float wz = -pz * LDU_SCALE;
 
-    // Apply robot offset if present
+    // Apply robot world offset
     if (robot) {
-        // Add ground offset
-        wy += robot->ground_offset;
+        // Pivot position in OpenGL coords
+        float pivot_gl_x = robot->rotation_center[0] * LDU_SCALE;
+        float pivot_gl_y = -robot->rotation_center[1] * LDU_SCALE;
+        float pivot_gl_z = -robot->rotation_center[2] * LDU_SCALE;
 
-        // Apply robot rotation around Y axis
-        float cos_r = cosf(robot->rotation_y);
-        float sin_r = sinf(robot->rotation_y);
-        float rx = wx * cos_r - wz * sin_r;
-        float rz = wx * sin_r + wz * cos_r;
-        wx = rx;
-        wz = rz;
-
-        // Also rotate the part's orientation matrix
-        // Rotation matrix for Y-axis rotation
-        float ry_a = cos_r, ry_c = sin_r;
-        float ry_g = -sin_r, ry_i = cos_r;
-
-        // Multiply: Ry * M (rotate the part's transformed rotation)
-        float na2 = ry_a * a2 + ry_c * g2;
-        float nb2 = ry_a * b2 + ry_c * h2;
-        float nc2 = ry_a * c2 + ry_c * i2;
-        float ng2 = ry_g * a2 + ry_i * g2;
-        float nh2 = ry_g * b2 + ry_i * h2;
-        float ni2 = ry_g * c2 + ry_i * i2;
-        a2 = na2; b2 = nb2; c2 = nc2;
-        g2 = ng2; h2 = nh2; i2 = ni2;
-
-        // Add robot world position offset
-        wx += robot->offset[0];
-        wy += robot->offset[1];
-        wz += robot->offset[2];
+        // wx, wy, wz is the rotated position relative to robot origin, in OpenGL coords
+        // Offset so that the pivot point ends up at robot->offset
+        wx = wx - pivot_gl_x + robot->offset[0];
+        wy = wy - pivot_gl_y + robot->offset[1] + robot->ground_offset;
+        wz = wz - pivot_gl_z + robot->offset[2];
     }
 
     // OpenGL column-major matrix
@@ -592,6 +626,44 @@ int main(int argc, char** argv) {
             robot.offset[2] = scene_robot->z;
             robot.rotation_y = scene_robot->rotation_y * DEG_TO_RAD_CONST;
             robot.ground_offset = 0.0f;  // Will compute after loading parts
+            robot.has_robotdef = false;
+            robot.rotation_center[0] = 0.0f;
+            robot.rotation_center[1] = 0.0f;
+            robot.rotation_center[2] = 0.0f;
+            robot.track_width = 0.0f;
+
+            // Try to load robotdef file
+            char robotdef_path[1024];
+            {
+                // Replace .mpd extension with .robotdef
+                strncpy(robotdef_path, mpd_path, sizeof(robotdef_path) - 1);
+                char* ext = strrchr(robotdef_path, '.');
+                if (ext) {
+                    strcpy(ext, ".robotdef");
+                } else {
+                    strncat(robotdef_path, ".robotdef", sizeof(robotdef_path) - strlen(robotdef_path) - 1);
+                }
+
+                RobotDef def;
+                if (robotdef_load(robotdef_path, &def)) {
+                    robot.has_robotdef = true;
+                    // Store rotation center (in LDU - will convert during rendering)
+                    robot.rotation_center[0] = def.drivetrain.rotation_center[0];
+                    robot.rotation_center[1] = def.drivetrain.rotation_center[1];
+                    robot.rotation_center[2] = def.drivetrain.rotation_center[2];
+                    robot.track_width = def.drivetrain.track_width;
+
+                    printf("  Loaded robotdef: rotation_center=[%.1f, %.1f, %.1f] LDU, track_width=%.1f LDU\n",
+                           robot.rotation_center[0], robot.rotation_center[1], robot.rotation_center[2],
+                           robot.track_width);
+                } else {
+                    printf("  No robotdef found (tried: %s)\n", robotdef_path);
+                }
+            }
+
+            // Initialize drivetrain at robot's starting position
+            drivetrain_init(&robot.drivetrain);
+            drivetrain_set_position(&robot.drivetrain, scene_robot->x, scene_robot->z, robot.rotation_y);
 
             int current_robot_index = (int)robots.size();
             robots.push_back(robot);
@@ -686,7 +758,9 @@ int main(int argc, char** argv) {
     bool show_bounding_boxes = false;
     bool show_robot_bounds = true;  // Show combined robot bounding box
 
-    printf("\nControls (Blender-style):\n");
+    printf("\nControls:\n");
+    printf("  Robot 1: WASD        - Drive (W/S forward/back, A/D turn)\n");
+    printf("  Robot 2: Arrow Keys  - Drive (Up/Down/Left/Right)\n");
     printf("  Middle Mouse + Drag  - Orbit camera\n");
     printf("  Shift + MMB + Drag   - Pan camera\n");
     printf("  Scroll Wheel         - Zoom in/out\n");
@@ -734,6 +808,70 @@ int main(int argc, char** argv) {
         if (input.keys_pressed[SDL_SCANCODE_B]) {
             show_bounding_boxes = !show_bounding_boxes;
             printf("Bounding boxes: %s\n", show_bounding_boxes ? "ON" : "OFF");
+        }
+
+        // Robot driving controls (WASD for first robot, Arrow keys for second)
+        // First robot: WASD
+        if (!robots.empty()) {
+            float left_pct = 0.0f;
+            float right_pct = 0.0f;
+
+            // W = forward, S = backward
+            if (input.keys[SDL_SCANCODE_W]) {
+                left_pct += 50.0f;
+                right_pct += 50.0f;
+            }
+            if (input.keys[SDL_SCANCODE_S]) {
+                left_pct -= 50.0f;
+                right_pct -= 50.0f;
+            }
+            // A = turn left (right faster than left)
+            if (input.keys[SDL_SCANCODE_A]) {
+                left_pct -= 30.0f;
+                right_pct += 30.0f;
+            }
+            // D = turn right (left faster than right)
+            if (input.keys[SDL_SCANCODE_D]) {
+                left_pct += 30.0f;
+                right_pct -= 30.0f;
+            }
+
+            drivetrain_set_motors(&robots[0].drivetrain, left_pct, right_pct);
+        }
+
+        // Second robot: Arrow keys
+        if (robots.size() > 1) {
+            float left_pct = 0.0f;
+            float right_pct = 0.0f;
+
+            if (input.keys[SDL_SCANCODE_UP]) {
+                left_pct += 50.0f;
+                right_pct += 50.0f;
+            }
+            if (input.keys[SDL_SCANCODE_DOWN]) {
+                left_pct -= 50.0f;
+                right_pct -= 50.0f;
+            }
+            if (input.keys[SDL_SCANCODE_LEFT]) {
+                left_pct -= 30.0f;
+                right_pct += 30.0f;
+            }
+            if (input.keys[SDL_SCANCODE_RIGHT]) {
+                left_pct += 30.0f;
+                right_pct -= 30.0f;
+            }
+
+            drivetrain_set_motors(&robots[1].drivetrain, left_pct, right_pct);
+        }
+
+        // Update drivetrain physics and sync positions
+        for (auto& robot : robots) {
+            drivetrain_update(&robot.drivetrain, dt);
+
+            // Sync drivetrain position back to robot offset for rendering
+            robot.offset[0] = robot.drivetrain.pos_x;
+            robot.offset[2] = robot.drivetrain.pos_z;
+            robot.rotation_y = robot.drivetrain.heading;
         }
 
         // Update camera

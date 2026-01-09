@@ -1,5 +1,5 @@
 # Robot Definition File
-# Generated from: ClawbotIQ.mpd
+# Generated from: Ike.mpd
 # 
 # This file describes the robot's structure and can be extended with:
 #   - rotation_axis: Define pivot points for articulated parts
@@ -8,52 +8,44 @@
 #   - sensor_ports: Map sensors to VEX IQ ports
 
 version: 1
-source_file: ClawbotIQ.mpd
-main_model: ClawbotIQ.ldr
+source_file: Ike.mpd
+main_model: main.ldr
 
 # Summary
 summary:
-  total_submodels: 16
-  total_wheels: 8
+  total_submodels: 20
+  total_wheels: 0
   total_motors: 4
-  total_sensors: 4
+  total_sensors: 0
   has_brain: true
 
 # Submodel Hierarchy
 hierarchy:
-  ClawbotIQ.ldr:
+  main.ldr:
     children:
-      - LeftSideDrive.ldr
-      - FrontStrut.ldr
-      - RearStrut.ldr
-      - RightSideDrive.ldr
-      - ShoulderMountA.ldr
-      - ShoulderMountB.ldr
-      - FrontBumper.ldr
-      - RearShoulderStrut.ldr
-      - RearRack.ldr
-      - Arm.ldr
-      - TouchLED.ldr
-    contains: [1 sensors]
+      - wheelsleft.ldr
+      - wheelsright.ldr
+      - torso.ldr
+      - rightmotorcable.ldr
+      - leftmotorcable.ldr
+      - arms.ldr
+      - armsmotorcable.ldr
+      - head.ldr
 
 # Detailed Submodel Definitions
 # Add rotation_axis, rotation_limits, etc. to articulated parts
 submodels:
-  ClawbotIQ.ldr:
+  main.ldr:
     position: [0, 0, 0]
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
-    special_parts:
-      - part: 228-3011
-        type: sensor:bumper_switch
-        position: [80.0, -64.0, 560.0]
 
-  LeftSideDrive.ldr:
-    position: [-48.0, 0.0, 448.0]
-    parent: ClawbotIQ.ldr
+  wheelsleft.ldr:
+    position: [144.0, -64.0, 16.0]
+    parent: main.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
@@ -62,23 +54,11 @@ submodels:
     special_parts:
       - part: 228-2560
         type: motor:smart_motor
-        position: [0.0, 0.0, 0.0]
-      - part: 228-2500-208
-        type: wheel:wheel_hub_44mm
-        position: [0.0, 0.0, -113.0]
-      - part: 228-2500-209
-        type: wheel:tire_44mm
-        position: [0.0, 0.0, -113.0]
-      - part: 228-2500-208
-        type: wheel:wheel_hub_44mm
-        position: [192.0, 0.0, -113.0]
-      - part: 228-2500-209
-        type: wheel:tire_44mm
-        position: [192.0, 0.0, -113.0]
+        position: [16.0, -16.0, 16.0]
 
-  RightSideDrive.ldr:
-    position: [208.0, 0.0, 448.0]
-    parent: ClawbotIQ.ldr
+  wheelsright.ldr:
+    position: [-144.0, -64.0, 16.0]
+    parent: main.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
@@ -87,32 +67,11 @@ submodels:
     special_parts:
       - part: 228-2560
         type: motor:smart_motor
-        position: [0.0, 0.0, 0.0]
-      - part: 228-2500-208
-        type: wheel:wheel_hub_44mm
-        position: [0.0, 0.0, -113.0]
-      - part: 228-2500-209
-        type: wheel:tire_44mm
-        position: [0.0, 0.0, -113.0]
-      - part: 228-2500-208
-        type: wheel:wheel_hub_44mm
-        position: [-192.0, 0.0, -113.0]
-      - part: 228-2500-209
-        type: wheel:tire_44mm
-        position: [-192.0, 0.0, -113.0]
+        position: [-16.0, -16.0, 16.0]
 
-  FrontStrut.ldr:
-    position: [0.0, -48.0, 336.0]
-    parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
-
-  RearStrut.ldr:
-    position: [80.0, 0.0, 560.0]
-    parent: ClawbotIQ.ldr
+  torso.ldr:
+    position: [0.0, -369.429, 13.5522]
+    parent: main.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
@@ -121,11 +80,11 @@ submodels:
     special_parts:
       - part: 228-2540c02
         type: brain:robot_brain_with_battery
-        position: [0.0, -112.0, 112.0]
+        position: [0.0, 8.7722, 27.0216]
 
-  ShoulderMountA.ldr:
-    position: [-48.0, -160.0, 224.0]
-    parent: ClawbotIQ.ldr
+  torsomotor.ldr:
+    position: [-80.0, 181.103, 51.8039]
+    parent: torso.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
@@ -134,47 +93,65 @@ submodels:
     special_parts:
       - part: 228-2560
         type: motor:smart_motor
-        position: [-16.0, -48.0, 0.0]
+        position: [0.0, 0.0, 0.0]
 
-  ShoulderMountB.ldr:
-    position: [192.0, -160.0, 224.0]
-    parent: ClawbotIQ.ldr
+  torsomotorcable.ldr:
+    position: [15.0, 159.365, -136.935]
+    parent: torso.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
 
-  FrontBumper.ldr:
-    position: [80.0, 0.0, 176.0]
-    parent: ClawbotIQ.ldr
+  torsomotorcable_subPart1.ldr:
+    position: [0.0, 0.0, 0.0]
+    parent: torsomotorcable.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
 
-  RearShoulderStrut.ldr:
-    position: [64.0, -192.0, 288.0]
-    parent: ClawbotIQ.ldr
+  rightmotorcable.ldr:
+    position: [-33.0, -80.0, -35.0]
+    parent: main.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
 
-  RearRack.ldr:
-    position: [32.0, -265.332, 376.058]
-    parent: ClawbotIQ.ldr
+  rightmotorcable_subPart1.ldr:
+    position: [0.0, 0.0, 0.0]
+    parent: rightmotorcable.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
 
-  Arm.ldr:
-    position: [80.0, -29.05, 18.242]
-    parent: ClawbotIQ.ldr
+  leftmotorcable.ldr:
+    position: [33.0, -80.0, -35.0]
+    parent: main.ldr
+    # Kinematics (fill in for articulated parts):
+    # rotation_axis: [x, y, z]  # Local axis of rotation
+    # rotation_origin: [x, y, z]  # Pivot point in local coords
+    # rotation_limits: [min_deg, max_deg]
+    kinematics: null
+
+  leftmotorcable_subPart1.ldr:
+    position: [0.0, 0.0, 0.0]
+    parent: leftmotorcable.ldr
+    # Kinematics (fill in for articulated parts):
+    # rotation_axis: [x, y, z]  # Local axis of rotation
+    # rotation_origin: [x, y, z]  # Pivot point in local coords
+    # rotation_limits: [min_deg, max_deg]
+    kinematics: null
+
+  shoulders.ldr:
+    position: [0.0, 0.0, 0.0]
+    parent: arms.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
@@ -183,111 +160,115 @@ submodels:
     special_parts:
       - part: 228-2560
         type: motor:smart_motor
-        position: [48.0, -64.0, -48.0]
+        position: [48.0, 16.0, 16.0]
 
-  FingerA.ldr:
-    position: [135.337, 0.0, -28.715]
-    parent: Arm.ldr
+  leftarm.ldr:
+    position: [144.0, 48.0, 16.0]
+    parent: arms.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
 
-  FingerB.ldr:
-    position: [-137.039, 0.0, -37.276]
-    parent: Arm.ldr
+  HandRubberBand.ldr:
+    position: [-112.0, 8.0, -336.0]
+    parent: rightarm.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
 
-  TouchLED.ldr:
-    position: [208.0, -160.0, 224.0]
-    parent: ClawbotIQ.ldr
+  ArmRubberBand.ldr:
+    position: [-96.0, -48.0, 0.0]
+    parent: rightarm.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
-    special_parts:
-      - part: 228-3010
-        type: sensor:touch_led
-        position: [0.0, 0.0, -32.0]
 
-  ColorSensor.ldr:
-    position: [124.71, -32.0, -59.46]
-    parent: Arm.ldr
+  arms.ldr:
+    position: [0.0, -387.207, 139.526]
+    parent: main.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
-    special_parts:
-      - part: 228-3012
-        type: sensor:color_sensor
-        position: [-16.0, 16.0, -32.0]
 
-  GyroSensor.ldr:
-    position: [80.0, 32.0, -32.0]
-    parent: FrontStrut.ldr
+  rightarm.ldr:
+    position: [-144.0, 48.0, 16.0]
+    parent: arms.ldr
     # Kinematics (fill in for articulated parts):
     # rotation_axis: [x, y, z]  # Local axis of rotation
     # rotation_origin: [x, y, z]  # Pivot point in local coords
     # rotation_limits: [min_deg, max_deg]
     kinematics: null
-    special_parts:
-      - part: 228-3014
-        type: sensor:gyro_sensor
-        position: [0.0, -16.0, -16.0]
+
+  armsmotorcable.ldr:
+    position: [83.0, -279.104, 109.672]
+    parent: main.ldr
+    # Kinematics (fill in for articulated parts):
+    # rotation_axis: [x, y, z]  # Local axis of rotation
+    # rotation_origin: [x, y, z]  # Pivot point in local coords
+    # rotation_limits: [min_deg, max_deg]
+    kinematics: null
+
+  armsmotorcable_subPart1.ldr:
+    position: [0.0, 0.0, 0.0]
+    parent: armsmotorcable.ldr
+    # Kinematics (fill in for articulated parts):
+    # rotation_axis: [x, y, z]  # Local axis of rotation
+    # rotation_origin: [x, y, z]  # Pivot point in local coords
+    # rotation_limits: [min_deg, max_deg]
+    kinematics: null
+
+  head.ldr:
+    position: [-16.0, -669.18, 42.2485]
+    parent: main.ldr
+    # Kinematics (fill in for articulated parts):
+    # rotation_axis: [x, y, z]  # Local axis of rotation
+    # rotation_origin: [x, y, z]  # Pivot point in local coords
+    # rotation_limits: [min_deg, max_deg]
+    kinematics: null
 
 # Drivetrain Configuration
 # Defines the robot's rotation center and drive geometry
 drivetrain:
   type: tank  # tank (skid-steer) | mecanum | omni | ackermann
-  left_drive: LeftSideDrive.ldr
-  right_drive: RightSideDrive.ldr
+  left_drive: wheelsleft.ldr
+  right_drive: wheelsright.ldr
   # Rotation center (midpoint between drive assemblies)
   # Detected via naming pattern
-  rotation_center: [80.0, 0.0, 448.0]
-  track_width: 256.0  # Distance between left and right wheels (LDU)
+  rotation_center: [0.0, -64.0, 16.0]
+  track_width: 288.0  # Distance between left and right wheels (LDU)
   # wheel_diameter: 44  # mm - set based on wheel type used
 
 # Wheel Configuration
 # Identify which submodels contain drive wheels
 wheels:
-  - submodel: LeftSideDrive.ldr
-    count: 4
-    # Configure drivetrain role:
-    # role: left_drive | right_drive | caster | manipulator
-    # diameter_mm: 44  # or 60, 200
-    role: null
-  - submodel: RightSideDrive.ldr
-    count: 4
-    # Configure drivetrain role:
-    # role: left_drive | right_drive | caster | manipulator
-    # diameter_mm: 44  # or 60, 200
-    role: null
+  # No wheel parts detected
 
 # Motor Configuration
 motors:
-  - submodel: LeftSideDrive.ldr
+  - submodel: wheelsleft.ldr
     count: 1
     # port: 1-12  # VEX IQ port number
     # purpose: drive | arm | intake | etc
     port: null
-  - submodel: RightSideDrive.ldr
+  - submodel: wheelsright.ldr
     count: 1
     # port: 1-12  # VEX IQ port number
     # purpose: drive | arm | intake | etc
     port: null
-  - submodel: ShoulderMountA.ldr
+  - submodel: torsomotor.ldr
     count: 1
     # port: 1-12  # VEX IQ port number
     # purpose: drive | arm | intake | etc
     port: null
-  - submodel: Arm.ldr
+  - submodel: shoulders.ldr
     count: 1
     # port: 1-12  # VEX IQ port number
     # purpose: drive | arm | intake | etc
@@ -295,26 +276,7 @@ motors:
 
 # Sensor Configuration
 sensors:
-  - type: bumper_switch
-    submodel: ClawbotIQ.ldr
-    part: 228-3011
-    # port: 1-12  # VEX IQ port number
-    port: null
-  - type: touch_led
-    submodel: TouchLED.ldr
-    part: 228-3010
-    # port: 1-12  # VEX IQ port number
-    port: null
-  - type: color_sensor
-    submodel: ColorSensor.ldr
-    part: 228-3012
-    # port: 1-12  # VEX IQ port number
-    port: null
-  - type: gyro_sensor
-    submodel: GyroSensor.ldr
-    part: 228-3014
-    # port: 1-12  # VEX IQ port number
-    port: null
+  # No sensor parts detected
 
 # Code Bindings
 # Maps variable names from VEX Python code to robot submodels
@@ -339,19 +301,3 @@ code_bindings:
   #   port: 1
   #   submodel: LeftSideDrive.ldr
   #   role: left_drive
-  
-  # Auto-detected candidates (uncomment and configure):
-  # Arm:
-  #   type: motor_group
-  #   ports: []  # Fill in port numbers
-  #   submodel: Arm.ldr
-  # LeftSideDrive:
-  #   type: motor
-  #   port: null  # Fill in port number
-  #   submodel: LeftSideDrive.ldr
-  #   role: left_drive
-  # RightSideDrive:
-  #   type: motor
-  #   port: null  # Fill in port number
-  #   submodel: RightSideDrive.ldr
-  #   role: right_drive
