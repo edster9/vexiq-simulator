@@ -28,6 +28,10 @@ bool platform_init(Platform* p, const char* title, int width, int height) {
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
+    // Enable MSAA (4x multisampling anti-aliasing)
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+
     // Create window
     SDL_Window* window = SDL_CreateWindow(
         title,
@@ -68,6 +72,9 @@ bool platform_init(Platform* p, const char* title, int width, int height) {
 
     // Enable VSync
     SDL_GL_SetSwapInterval(1);
+
+    // Enable multisampling
+    glEnable(GL_MULTISAMPLE);
 
     // Print OpenGL info
     printf("OpenGL Vendor:   %s\n", glGetString(GL_VENDOR));

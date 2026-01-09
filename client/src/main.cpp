@@ -73,7 +73,9 @@
 #include "render/mesh.h"
 #include "render/mpd_loader.h"
 #include "render/text.h"
+#include "render/debug.h"
 #include "scene/scene.h"
+#include "physics/drivetrain.h"
 #include "ipc/gamepad.h"
 #include "ipc/python_bridge.h"
 
@@ -675,10 +677,20 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Warning: Failed to initialize text renderer\n");
     }
 
+    // Initialize debug renderer
+    if (!debug_init()) {
+        fprintf(stderr, "Warning: Failed to initialize debug renderer\n");
+    }
+
+    // Debug display flags
+    bool show_bounding_boxes = false;
+    bool show_robot_bounds = true;  // Show combined robot bounding box
+
     printf("\nControls (Blender-style):\n");
     printf("  Middle Mouse + Drag  - Orbit camera\n");
     printf("  Shift + MMB + Drag   - Pan camera\n");
     printf("  Scroll Wheel         - Zoom in/out\n");
+    printf("  B                    - Toggle bounding boxes\n");
     printf("  F11                  - Toggle fullscreen\n");
     printf("  Escape               - Quit\n\n");
 
@@ -718,6 +730,12 @@ int main(int argc, char** argv) {
             platform_toggle_fullscreen(&platform);
         }
 
+        // Toggle bounding box display
+        if (input.keys_pressed[SDL_SCANCODE_B]) {
+            show_bounding_boxes = !show_bounding_boxes;
+            printf("Bounding boxes: %s\n", show_bounding_boxes ? "ON" : "OFF");
+        }
+
         // Update camera
         camera_update(&camera, &input, dt);
 
@@ -747,6 +765,109 @@ int main(int argc, char** argv) {
             mesh_render(part.mesh, &model, &view, &projection, light_dir, color);
         }
 
+        // Debug rendering (bounding boxes)
+        if (show_bounding_boxes) {
+            debug_begin(&view, &projection);
+
+            // Colors for different robots
+            Vec3 robot_colors[] = {
+                vec3(0.0f, 1.0f, 0.0f),   // Green
+                vec3(0.0f, 0.5f, 1.0f),   // Blue
+                vec3(1.0f, 0.5f, 0.0f),   // Orange
+                vec3(1.0f, 0.0f, 1.0f),   // Magenta
+            };
+            int num_colors = sizeof(robot_colors) / sizeof(robot_colors[0]);
+
+            // Track robot bounding boxes for combined display
+            struct RobotBounds {
+                float min_x, min_y, min_z;
+                float max_x, max_y, max_z;
+                bool initialized;
+            };
+            std::vector<RobotBounds> robot_bounds(robots.size());
+            for (auto& rb : robot_bounds) {
+                rb.initialized = false;
+                rb.min_x = rb.min_y = rb.min_z = FLT_MAX;
+                rb.max_x = rb.max_y = rb.max_z = -FLT_MAX;
+            }
+
+            // Draw bounding box for each part
+            for (const auto& part : parts) {
+                if (!part.mesh) continue;
+
+                const RobotInstance* robot = nullptr;
+                if (part.robot_index >= 0 && part.robot_index < (int)robots.size()) {
+                    robot = &robots[part.robot_index];
+                }
+                Mat4 model = build_ldraw_model_matrix(part.position, part.rotation, robot);
+
+                // Get color based on robot index
+                Vec3 color = vec3(0.5f, 0.5f, 0.5f);  // Gray for no robot
+                if (part.robot_index >= 0) {
+                    color = robot_colors[part.robot_index % num_colors];
+                    // Dim it for per-part boxes
+                    color = vec3(color.x * 0.4f, color.y * 0.4f, color.z * 0.4f);
+                }
+
+                // Draw part bounding box (transformed)
+                debug_draw_box_transformed(&model, part.mesh->min_bounds, part.mesh->max_bounds, color);
+
+                // Accumulate robot bounds
+                if (part.robot_index >= 0 && show_robot_bounds) {
+                    RobotBounds& rb = robot_bounds[part.robot_index];
+
+                    // Transform all 8 corners of the part's bounding box
+                    for (int corner = 0; corner < 8; corner++) {
+                        float lx = (corner & 1) ? part.mesh->max_bounds[0] : part.mesh->min_bounds[0];
+                        float ly = (corner & 2) ? part.mesh->max_bounds[1] : part.mesh->min_bounds[1];
+                        float lz = (corner & 4) ? part.mesh->max_bounds[2] : part.mesh->min_bounds[2];
+
+                        // Transform to world space
+                        float wx = model.m[0]*lx + model.m[4]*ly + model.m[8]*lz + model.m[12];
+                        float wy = model.m[1]*lx + model.m[5]*ly + model.m[9]*lz + model.m[13];
+                        float wz = model.m[2]*lx + model.m[6]*ly + model.m[10]*lz + model.m[14];
+
+                        // Expand robot bounds
+                        if (wx < rb.min_x) rb.min_x = wx;
+                        if (wy < rb.min_y) rb.min_y = wy;
+                        if (wz < rb.min_z) rb.min_z = wz;
+                        if (wx > rb.max_x) rb.max_x = wx;
+                        if (wy > rb.max_y) rb.max_y = wy;
+                        if (wz > rb.max_z) rb.max_z = wz;
+                        rb.initialized = true;
+                    }
+                }
+            }
+
+            // Draw combined robot bounding boxes (brighter)
+            if (show_robot_bounds) {
+                for (size_t i = 0; i < robot_bounds.size(); i++) {
+                    const RobotBounds& rb = robot_bounds[i];
+                    if (!rb.initialized) continue;
+
+                    Vec3 color = robot_colors[i % num_colors];
+                    Vec3 center = vec3(
+                        (rb.min_x + rb.max_x) / 2.0f,
+                        (rb.min_y + rb.max_y) / 2.0f,
+                        (rb.min_z + rb.max_z) / 2.0f
+                    );
+                    Vec3 half_extents = vec3(
+                        (rb.max_x - rb.min_x) / 2.0f,
+                        (rb.max_y - rb.min_y) / 2.0f,
+                        (rb.max_z - rb.min_z) / 2.0f
+                    );
+
+                    debug_draw_box(center, half_extents, color);
+
+                    // Draw robot origin axes
+                    Vec3 origin = vec3(robots[i].offset[0], robots[i].ground_offset, robots[i].offset[2]);
+                    debug_draw_axes(origin, 6.0f);  // 6 inch axes
+                }
+            }
+
+            debug_end();
+        }
+
         // Render orientation gizmo in bottom-left corner
         axis_gizmo_render(&axis_gizmo, &view, platform.width, platform.height);
 
@@ -772,6 +893,7 @@ int main(int argc, char** argv) {
 
     shader_destroy(&mesh_shader);
     text_destroy();
+    debug_destroy();
     gamepad_destroy(&gamepad);
     axis_gizmo_destroy(&axis_gizmo);
     floor_destroy(&floor);

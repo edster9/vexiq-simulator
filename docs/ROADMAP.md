@@ -82,8 +82,9 @@ This document outlines the planned development phases for the VEX IQ Simulator. 
 ### 3.3 Physics Engine
 - [x] Basic movement physics (velocity, turning)
 - [x] Field boundary collision
-- [ ] Rigid body physics (PyBullet integration)
-- [ ] Game piece physics (balls, cubes rolling/stacking)
+- [ ] Rigid body physics (Jolt Physics integration)
+- [ ] Game piece physics (stackable pins)
+- [ ] Articulated joints (arms, claws, lifts)
 - [ ] Friction and weight simulation
 
 ---
@@ -162,10 +163,10 @@ This document outlines the planned development phases for the VEX IQ Simulator. 
 
 ### Current Implementation
 
-- **3D Rendering**: Ursina engine (Python-friendly wrapper around Panda3D)
-- **UI**: Ursina's built-in UI system with custom control panel
-- **Gamepad**: pygame for cross-platform controller support
-- **Next**: PyBullet for advanced physics simulation
+- **3D Rendering**: C++ with SDL2/OpenGL (migrated from Python/Ursina)
+- **UI**: Custom OpenGL rendering
+- **Gamepad**: SDL2 gamepad support
+- **Next**: Jolt Physics for advanced physics simulation (see [PHYSICS_DESIGN.md](PHYSICS_DESIGN.md))
 
 ### File Formats
 
@@ -189,7 +190,7 @@ We welcome contributions! Here's how to help:
 
 - [ ] Distance sensor simulation
 - [ ] 2D field renderer
-- [ ] PyBullet integration prototype
+- [ ] Jolt Physics integration (see [PHYSICS_DESIGN.md](PHYSICS_DESIGN.md))
 - [ ] Robot path recording
 
 ### Development Setup
@@ -211,8 +212,8 @@ pip install -r requirements-dev.txt  # For development tools
 |---------|--------|----------|
 | 0.1 | Released | Basic simulation, controller, motor/pneumatic viz |
 | 0.2 | **Current** | 3D field (Ursina), robot movement, Windows/Linux gamepad |
-| 0.3 | Planned | Sensor simulation, robot model improvements |
-| 0.4 | Planned | PyBullet physics, game pieces |
+| 0.3 | **Current** | C++ SDL/OpenGL client, scene management, multi-robot |
+| 0.4 | Planned | Jolt physics, game pieces |
 | 1.0 | Planned | Full 3D physics, competition mode |
 | 2.0 | Future | Robot designer, multi-robot support |
 
@@ -223,7 +224,7 @@ pip install -r requirements-dev.txt  # For development tools
 - [VEXcode VR](https://vr.vex.com/) - Official VEX virtual robot environment
 - [RobotMesh Studio](https://www.robotmesh.com/) - Alternative VEX programming environment
 - [Gazebo](https://gazebosim.org/) - Professional robotics simulator
-- [PyBullet](https://pybullet.org/) - Physics simulation library
+- [Jolt Physics](https://github.com/jrouwe/JoltPhysics) - High-performance physics engine (selected for this project)
 - [LDCad](http://www.melkert.net/LDCad) - LDraw CAD editor for building virtual LEGO/VEX models
 - [LDraw.org](https://www.ldraw.org/) - Open standard for LEGO CAD programs
 - [ExportLDraw](https://github.com/cuddlyogre/ExportLDraw) - Blender addon for LDraw import/export
