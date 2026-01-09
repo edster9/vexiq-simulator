@@ -383,6 +383,20 @@ class LDrawModelRenderer:
                 print(f"    Position: ({pos_x:.2f}, {pos_y:.2f}, {pos_z:.2f})")
                 print(f"    Color: ({r:.2f}, {g:.2f}, {b:.2f})")
                 print(f"    Visible: {entity.visible}, Enabled: {entity.enabled}")
+                # Print rotation matrix for comparison with C++
+                if not self.skip_rotation and self.part_count <= 5:
+                    print(f"    LDraw rotation (row-major):")
+                    a, b_, c, d, e, f, g_, h, i = world_rotation
+                    print(f"      [{a:.2f}, {b_:.2f}, {c:.2f}]")
+                    print(f"      [{d:.2f}, {e:.2f}, {f:.2f}]")
+                    print(f"      [{g_:.2f}, {h:.2f}, {i:.2f}]")
+                    a2, b2, c2 = a, -b_, c
+                    d2, e2, f2 = -d, e, -f
+                    g2, h2, i2 = g_, -h, i
+                    print(f"    After C*M*C transform:")
+                    print(f"      [{a2:.2f}, {b2:.2f}, {c2:.2f}]")
+                    print(f"      [{d2:.2f}, {e2:.2f}, {f2:.2f}]")
+                    print(f"      [{g2:.2f}, {h2:.2f}, {i2:.2f}]")
 
         except Exception as ex:
             if self.verbose:

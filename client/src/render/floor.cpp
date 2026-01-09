@@ -14,58 +14,65 @@ static const char* floor_vert_src =
     "}\n";
 
 // Fragment shader - VEX IQ field style (gray tiles with grid)
+// World scale: 1 unit = 1 inch, grid = 12" (1 foot)
 static const char* floor_frag_src =
     "#version 330 core\n"
     "in vec3 worldPos;\n"
     "out vec4 FragColor;\n"
     "uniform float gridSize;\n"
     "uniform vec3 cameraPos;\n"
-    "\n"
-    "float hash(vec2 p) {\n"
-    "    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);\n"
-    "}\n"
-    "\n"
-    "float noise(vec2 p) {\n"
-    "    vec2 i = floor(p);\n"
-    "    vec2 f = fract(p);\n"
-    "    f = f * f * (3.0 - 2.0 * f);\n"
-    "    float a = hash(i);\n"
-    "    float b = hash(i + vec2(1.0, 0.0));\n"
-    "    float c = hash(i + vec2(0.0, 1.0));\n"
-    "    float d = hash(i + vec2(1.0, 1.0));\n"
-    "    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);\n"
-    "}\n"
+    "uniform float fieldWidth;\n"   // 96 inches (8 ft)
+    "uniform float fieldDepth;\n"   // 72 inches (6 ft)
     "\n"
     "void main() {\n"
-    "    // VEX IQ field gray color with subtle variation\n"
-    "    float n = noise(worldPos.xz * 0.3) * 0.05;\n"
-    "    vec3 fieldGray = vec3(0.45, 0.45, 0.48) + n;\n"
+    "    // Check if we're inside the VEX IQ field bounds\n"
+    "    float halfW = fieldWidth * 0.5;\n"
+    "    float halfD = fieldDepth * 0.5;\n"
+    "    bool insideField = abs(worldPos.x) <= halfW && abs(worldPos.z) <= halfD;\n"
     "\n"
-    "    // Grid lines (1 foot = 1 unit)\n"
-    "    vec2 grid = abs(fract(worldPos.xz / gridSize - 0.5) - 0.5) / fwidth(worldPos.xz / gridSize);\n"
-    "    float line = min(grid.x, grid.y);\n"
-    "    float gridLine = 1.0 - min(line, 1.0);\n"
+    "    // Base color: field gray inside, darker outside\n"
+    "    vec3 fieldGray = vec3(0.5, 0.5, 0.52);\n"
+    "    vec3 outsideGray = vec3(0.25, 0.25, 0.27);\n"
+    "    vec3 baseColor = insideField ? fieldGray : outsideGray;\n"
     "\n"
-    "    // Origin axes\n"
-    "    float xAxis = 1.0 - min(abs(worldPos.z) / fwidth(worldPos.z) * 0.3, 1.0);\n"
-    "    float zAxis = 1.0 - min(abs(worldPos.x) / fwidth(worldPos.x) * 0.3, 1.0);\n"
+    "    // Grid lines every gridSize (12 inches = 1 foot)\n"
+    "    vec2 gridCoord = worldPos.xz / gridSize;\n"
+    "    vec2 grid = abs(fract(gridCoord - 0.5) - 0.5);\n"
+    "    vec2 lineWidth = fwidth(gridCoord) * 1.5;\n"
+    "    vec2 gridLines = smoothstep(lineWidth, vec2(0.0), grid);\n"
+    "    float gridLine = max(gridLines.x, gridLines.y);\n"
     "\n"
-    "    vec3 color = fieldGray;\n"
-    "    color = mix(color, vec3(0.35, 0.35, 0.38), gridLine * 0.4);\n"
-    "    color = mix(color, vec3(0.8, 0.2, 0.2), xAxis * 0.7);  // X axis red\n"
-    "    color = mix(color, vec3(0.2, 0.2, 0.8), zAxis * 0.7);  // Z axis blue\n"
+    "    // Field boundary (thicker lines at edges)\n"
+    "    float boundaryX = smoothstep(0.5, 0.0, abs(abs(worldPos.x) - halfW) / 0.5);\n"
+    "    float boundaryZ = smoothstep(0.5, 0.0, abs(abs(worldPos.z) - halfD) / 0.5);\n"
+    "    float boundary = max(boundaryX, boundaryZ);\n"
     "\n"
-    "    // Distance fog\n"
+    "    // Origin axes (thicker)\n"
+    "    float axisWidth = 0.25;  // 1/4 inch wide\n"
+    "    float xAxis = smoothstep(axisWidth, 0.0, abs(worldPos.z));\n"
+    "    float zAxis = smoothstep(axisWidth, 0.0, abs(worldPos.x));\n"
+    "\n"
+    "    // Combine colors\n"
+    "    vec3 color = baseColor;\n"
+    "    vec3 gridColor = insideField ? vec3(0.35, 0.35, 0.38) : vec3(0.2, 0.2, 0.22);\n"
+    "    color = mix(color, gridColor, gridLine * 0.7);\n"
+    "    color = mix(color, vec3(1.0, 0.3, 0.3), xAxis * 0.8);  // X axis red\n"
+    "    color = mix(color, vec3(0.3, 0.3, 1.0), zAxis * 0.8);  // Z axis blue\n"
+    "    color = mix(color, vec3(0.9, 0.9, 0.2), boundary * 0.8);  // Yellow field boundary\n"
+    "\n"
+    "    // Subtle distance fog (adjusted for inch scale)\n"
     "    float dist = length(worldPos.xz - cameraPos.xz);\n"
-    "    float fog = 1.0 - exp(-dist * 0.015);\n"
-    "    color = mix(color, vec3(0.2, 0.2, 0.22), fog);\n"
+    "    float fog = 1.0 - exp(-dist * 0.001);\n"
+    "    color = mix(color, vec3(0.15, 0.15, 0.18), fog * 0.5);\n"
     "\n"
     "    FragColor = vec4(color, 1.0);\n"
     "}\n";
 
-bool floor_init(Floor* f, float size, float grid_size) {
+bool floor_init(Floor* f, float size, float grid_size, float field_width, float field_depth) {
     f->size = size;
     f->grid_size = grid_size;
+    f->field_width = field_width;
+    f->field_depth = field_depth;
 
     if (!shader_create(&f->shader, floor_vert_src, floor_frag_src)) {
         fprintf(stderr, "Failed to create floor shader\n");
@@ -109,6 +116,8 @@ void floor_render(Floor* f, Mat4* view, Mat4* projection, Vec3 camera_pos) {
     shader_set_mat4(&f->shader, "view", view);
     shader_set_mat4(&f->shader, "projection", projection);
     shader_set_float(&f->shader, "gridSize", f->grid_size);
+    shader_set_float(&f->shader, "fieldWidth", f->field_width);
+    shader_set_float(&f->shader, "fieldDepth", f->field_depth);
     shader_set_vec3(&f->shader, "cameraPos", camera_pos);
 
     glBindVertexArray(f->vao);

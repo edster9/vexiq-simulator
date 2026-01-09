@@ -13,7 +13,7 @@ bool platform_init(Platform* p, const char* title, int width, int height) {
 
     // Initialize SDL
     if (!sdl_initialized) {
-        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) < 0) {
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
             fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
             return false;
         }

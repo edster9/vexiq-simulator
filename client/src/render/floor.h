@@ -11,12 +11,15 @@ typedef struct Floor {
     GLuint vao;
     GLuint vbo;
     Shader shader;
-    float size;        // Total floor size
-    float grid_size;   // Size of each grid cell
+    float size;         // Total floor size (square)
+    float grid_size;    // Size of each grid cell
+    float field_width;  // VEX IQ field width (96" = 8ft)
+    float field_depth;  // VEX IQ field depth (72" = 6ft)
 } Floor;
 
 // Initialize floor with given size and grid cell size
-bool floor_init(Floor* f, float size, float grid_size);
+// field_width and field_depth define the VEX IQ competition area
+bool floor_init(Floor* f, float size, float grid_size, float field_width, float field_depth);
 
 // Cleanup
 void floor_destroy(Floor* f);

@@ -4,99 +4,91 @@
 #define PI 3.14159265358979323846f
 #define DEG_TO_RAD (PI / 180.0f)
 
-void camera_init(FlyCamera* cam) {
-    cam->position = vec3(0, 3, 8);  // Start looking at VEX field from above
-    cam->yaw = 0;
-    cam->pitch = -0.3f;  // Slight downward angle
+void camera_init(OrbitCamera* cam) {
+    // World scale: 1 unit = 1 inch
+    // VEX IQ table is 96" x 72" (8ft x 6ft)
+    cam->target = vec3(0, 0, 0);     // Look at center of table
+    cam->distance = 120.0f;          // ~10 feet back to see whole table
+    cam->yaw = 0.0f;                 // Looking straight at table
+    cam->pitch = -0.6f;              // Looking down at ~35 degrees
 
-    cam->move_speed = 5.0f;
-    cam->fast_speed = 15.0f;
-    cam->mouse_sensitivity = 0.002f;
+    cam->orbit_sensitivity = 0.005f;
+    cam->pan_sensitivity = 0.01f;
+    cam->zoom_sensitivity = 1.0f;
+
+    cam->min_distance = 0.5f;        // ~0.5 inches minimum (allow close zoom)
+    cam->max_distance = 500.0f;      // ~40 feet max
 
     cam->fov = 60.0f * DEG_TO_RAD;
     cam->near = 0.1f;
-    cam->far = 500.0f;
+    cam->far = 2000.0f;              // ~160 feet far plane
 }
 
-Vec3 camera_forward(FlyCamera* cam) {
-    return (Vec3){
-        sinf(cam->yaw) * cosf(cam->pitch),
-        sinf(cam->pitch),
-        -cosf(cam->yaw) * cosf(cam->pitch)
-    };
+Vec3 camera_position(OrbitCamera* cam) {
+    // Spherical coordinates: position on sphere around target
+    float x = cam->target.x + cam->distance * sinf(cam->yaw) * cosf(cam->pitch);
+    float y = cam->target.y - cam->distance * sinf(cam->pitch);
+    float z = cam->target.z + cam->distance * cosf(cam->yaw) * cosf(cam->pitch);
+    return vec3(x, y, z);
 }
 
-Vec3 camera_right(FlyCamera* cam) {
-    return (Vec3){
-        cosf(cam->yaw),
-        0,
-        sinf(cam->yaw)
-    };
-}
+void camera_update(OrbitCamera* cam, InputState* input, float dt) {
+    (void)dt;  // Not used for orbit camera
 
-Vec3 camera_up(FlyCamera* cam) {
-    (void)cam;
-    return vec3(0, 1, 0);
-}
+    bool mmb_held = input->mouse_buttons[MOUSE_MIDDLE];
+    bool shift_held = input->keys[KEY_LSHIFT] || input->keys[KEY_RSHIFT];
 
-void camera_update(FlyCamera* cam, InputState* input, float dt) {
-    // Mouse look when captured
-    if (input->mouse_captured) {
-        bool has_movement = (input->mouse_dx != 0 || input->mouse_dy != 0);
+    if (mmb_held) {
+        float dx = (float)input->mouse_dx;
+        float dy = (float)input->mouse_dy;
 
-        if (input->mouse_capture_just_started) {
-            if (has_movement) {
-                input->mouse_capture_just_started = false;
-            }
+        if (shift_held) {
+            // Pan: move target in screen space
+            // Calculate camera right and up vectors in world space
+            float cos_yaw = cosf(cam->yaw);
+            float sin_yaw = sinf(cam->yaw);
+
+            // Right vector (always horizontal)
+            Vec3 right = vec3(cos_yaw, 0, sin_yaw);
+
+            // Up vector (perpendicular to view direction, mostly vertical)
+            Vec3 up = vec3(0, 1, 0);
+
+            // Scale pan by distance for consistent feel
+            float pan_scale = cam->pan_sensitivity * cam->distance * 0.1f;
+
+            // Blender-style pan: drag right = view moves right = target moves right
+            cam->target = vec3_add(cam->target, vec3_scale(right, dx * pan_scale));
+            cam->target = vec3_add(cam->target, vec3_scale(up, dy * pan_scale));
         } else {
-            cam->yaw -= input->mouse_dx * cam->mouse_sensitivity;
-            cam->pitch += input->mouse_dy * cam->mouse_sensitivity;
+            // Orbit: rotate around target
+            cam->yaw -= dx * cam->orbit_sensitivity;
+            cam->pitch -= dy * cam->orbit_sensitivity;
+
+            // Clamp pitch to avoid flipping
+            float max_pitch = 89.0f * DEG_TO_RAD;
+            if (cam->pitch > max_pitch) cam->pitch = max_pitch;
+            if (cam->pitch < -max_pitch) cam->pitch = -max_pitch;
         }
     }
 
-    // Clamp pitch
-    float max_pitch = 89.0f * DEG_TO_RAD;
-    if (cam->pitch > max_pitch) cam->pitch = max_pitch;
-    if (cam->pitch < -max_pitch) cam->pitch = -max_pitch;
-
-    // Movement
-    float speed = cam->move_speed;
-    if (input->keys[KEY_LSHIFT] || input->keys[KEY_RSHIFT]) {
-        speed = cam->fast_speed;
-    }
-
-    Vec3 forward = camera_forward(cam);
-    Vec3 right = camera_right(cam);
-    Vec3 move = vec3_zero();
-
-    if (input->keys[KEY_W]) move = vec3_add(move, forward);
-    if (input->keys[KEY_S]) move = vec3_sub(move, forward);
-    if (input->keys[KEY_D]) move = vec3_add(move, right);
-    if (input->keys[KEY_A]) move = vec3_sub(move, right);
-    if (input->keys[KEY_E] || input->keys[KEY_SPACE]) move.y += 1.0f;
-    if (input->keys[KEY_Q] || input->keys[KEY_LCTRL]) move.y -= 1.0f;
-
-    float len = vec3_length(move);
-    if (len > 0.001f) {
-        move = vec3_scale(move, speed * dt / len);
-        cam->position = vec3_add(cam->position, move);
-    }
-
-    // Scroll to adjust speed
+    // Scroll to zoom
     if (input->scroll_y != 0) {
-        cam->move_speed += input->scroll_y * 1.0f;
-        if (cam->move_speed < 1.0f) cam->move_speed = 1.0f;
-        if (cam->move_speed > 50.0f) cam->move_speed = 50.0f;
-        cam->fast_speed = cam->move_speed * 3.0f;
+        // Zoom factor: scroll up = zoom in (reduce distance)
+        float zoom_factor = 1.0f - input->scroll_y * 0.1f;
+        cam->distance *= zoom_factor;
+
+        // Clamp distance
+        if (cam->distance < cam->min_distance) cam->distance = cam->min_distance;
+        if (cam->distance > cam->max_distance) cam->distance = cam->max_distance;
     }
 }
 
-Mat4 camera_view_matrix(FlyCamera* cam) {
-    Vec3 forward = camera_forward(cam);
-    Vec3 target = vec3_add(cam->position, forward);
-    return mat4_look_at(cam->position, target, vec3_up());
+Mat4 camera_view_matrix(OrbitCamera* cam) {
+    Vec3 pos = camera_position(cam);
+    return mat4_look_at(pos, cam->target, vec3_up());
 }
 
-Mat4 camera_projection_matrix(FlyCamera* cam, float aspect) {
+Mat4 camera_projection_matrix(OrbitCamera* cam, float aspect) {
     return mat4_perspective(cam->fov, aspect, cam->near, cam->far);
 }

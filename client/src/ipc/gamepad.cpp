@@ -27,6 +27,14 @@ static int scale_axis(int value) {
 void gamepad_init(Gamepad* gp) {
     memset(gp, 0, sizeof(Gamepad));
 
+    // Initialize game controller subsystem if not already done
+    if (!SDL_WasInit(SDL_INIT_GAMECONTROLLER)) {
+        if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0) {
+            printf("[Gamepad] Warning: Could not init gamecontroller: %s\n", SDL_GetError());
+            return;
+        }
+    }
+
     // Check for already connected controllers
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {

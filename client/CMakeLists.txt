@@ -25,6 +25,10 @@ set(SOURCES
     src/render/camera.cpp
     src/render/shader.cpp
     src/render/floor.cpp
+    src/render/glb_loader.cpp
+    src/render/mesh.cpp
+    src/render/mpd_loader.cpp
+    src/render/text.cpp
     src/ipc/subprocess.cpp
     src/ipc/gamepad.cpp
     src/ipc/python_bridge.cpp
