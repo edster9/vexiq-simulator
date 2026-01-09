@@ -36,8 +36,13 @@ typedef struct InputState {
 bool platform_init(Platform* p, const char* title, int width, int height);
 void platform_shutdown(Platform* p);
 
+// Event callback type (for custom event handlers like gamepad)
+// The event parameter is SDL_Event* but typed as void* to avoid SDL dependency in header
+typedef void (*PlatformEventCallback)(void* event, void* user_data);
+
 // Frame handling
 void platform_poll_events(Platform* p, InputState* input);
+void platform_poll_events_ex(Platform* p, InputState* input, PlatformEventCallback callback, void* user_data);
 void platform_swap_buffers(Platform* p);
 
 // Timing

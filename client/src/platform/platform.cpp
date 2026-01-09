@@ -91,7 +91,7 @@ void platform_shutdown(Platform* p) {
     sdl_initialized = false;
 }
 
-void platform_poll_events(Platform* p, InputState* input) {
+void platform_poll_events_ex(Platform* p, InputState* input, PlatformEventCallback callback, void* user_data) {
     // Reset per-frame state
     memset(input->keys_pressed, 0, sizeof(input->keys_pressed));
     memset(input->keys_released, 0, sizeof(input->keys_released));
@@ -103,6 +103,11 @@ void platform_poll_events(Platform* p, InputState* input) {
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        // Call custom event handler if provided
+        if (callback) {
+            callback(&event, user_data);
+        }
+
         switch (event.type) {
             case SDL_QUIT:
                 p->should_quit = true;
@@ -162,6 +167,10 @@ void platform_poll_events(Platform* p, InputState* input) {
                 break;
         }
     }
+}
+
+void platform_poll_events(Platform* p, InputState* input) {
+    platform_poll_events_ex(p, input, NULL, NULL);
 }
 
 void platform_swap_buffers(Platform* p) {

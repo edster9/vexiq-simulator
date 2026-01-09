@@ -10,10 +10,23 @@
 #include "math/mat4.h"
 #include "render/camera.h"
 #include "render/floor.h"
+#include "ipc/gamepad.h"
+#include "ipc/python_bridge.h"
 
 #include <GL/glew.h>
+#include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#define PATH_SEP "\\"
+#else
+#include <unistd.h>
+#include <libgen.h>
+#define PATH_SEP "/"
+#endif
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
@@ -23,12 +36,51 @@
 #define FIELD_SIZE 50.0f   // Large floor for now
 #define GRID_SIZE 1.0f     // 1 foot grid
 
-int main(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
+// Get the directory containing the executable
+static void get_exe_dir(char* buffer, size_t size) {
+#ifdef _WIN32
+    GetModuleFileNameA(NULL, buffer, (DWORD)size);
+    char* last_sep = strrchr(buffer, '\\');
+    if (last_sep) *last_sep = '\0';
+#else
+    ssize_t len = readlink("/proc/self/exe", buffer, size - 1);
+    if (len > 0) {
+        buffer[len] = '\0';
+        char* dir = dirname(buffer);
+        memmove(buffer, dir, strlen(dir) + 1);
+    } else {
+        buffer[0] = '.';
+        buffer[1] = '\0';
+    }
+#endif
+}
 
+// Find simulator directory relative to executable
+static void get_simulator_dir(char* buffer, size_t size) {
+    char exe_dir[512];
+    get_exe_dir(exe_dir, sizeof(exe_dir));
+
+    // Assuming: exe is in client/build-*/vexiq_sim
+    // Simulator is in ../simulator relative to client/
+    snprintf(buffer, size, "%s" PATH_SEP ".." PATH_SEP ".." PATH_SEP "simulator", exe_dir);
+}
+
+// SDL event callback for gamepad handling
+static void sdl_event_callback(void* event, void* user_data) {
+    Gamepad* gp = (Gamepad*)user_data;
+    gamepad_handle_event(gp, (SDL_Event*)event);
+}
+
+int main(int argc, char** argv) {
     printf("VEX IQ Simulator - C++ Client\n");
     printf("=============================\n\n");
+
+    // Parse command line
+    const char* iqpython_path = NULL;
+    if (argc >= 2) {
+        iqpython_path = argv[1];
+        printf("Robot file: %s\n", iqpython_path);
+    }
 
     // Initialize platform (SDL + OpenGL)
     Platform platform;
@@ -53,6 +105,26 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Initialize gamepad
+    Gamepad gamepad;
+    gamepad_init(&gamepad);
+
+    // Initialize Python bridge if .iqpython file provided
+    PythonBridge bridge;
+    bool use_bridge = false;
+    if (iqpython_path) {
+        char simulator_dir[512];
+        get_simulator_dir(simulator_dir, sizeof(simulator_dir));
+        printf("Simulator dir: %s\n", simulator_dir);
+
+        if (python_bridge_init(&bridge, iqpython_path, simulator_dir)) {
+            use_bridge = true;
+            printf("Python bridge initialized\n");
+        } else {
+            fprintf(stderr, "Warning: Failed to initialize Python bridge\n");
+        }
+    }
+
     // OpenGL setup
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.15f, 0.15f, 0.18f, 1.0f);  // Dark gray background
@@ -65,7 +137,11 @@ int main(int argc, char** argv) {
     printf("  Shift     - Move faster\n");
     printf("  Scroll    - Adjust speed\n");
     printf("  F11       - Toggle fullscreen\n");
-    printf("  Escape    - Quit\n\n");
+    printf("  Escape    - Quit\n");
+    if (gamepad.connected) {
+        printf("  Gamepad   - Control robot\n");
+    }
+    printf("\n");
 
     // Timing
     double last_time = platform_get_time();
@@ -80,10 +156,10 @@ int main(int argc, char** argv) {
         // Cap dt to prevent physics explosions on lag spikes
         if (dt > 0.1f) dt = 0.1f;
 
-        // Poll events
-        platform_poll_events(&platform, &input);
+        // Poll events (with gamepad callback)
+        platform_poll_events_ex(&platform, &input, sdl_event_callback, &gamepad);
 
-        // Handle input
+        // Handle keyboard input
         if (input.keys_pressed[KEY_ESCAPE]) {
             platform.should_quit = true;
         }
@@ -98,6 +174,31 @@ int main(int argc, char** argv) {
         }
         if (input.mouse_released[MOUSE_RIGHT]) {
             platform_capture_mouse(&platform, &input, false);
+        }
+
+        // Update gamepad state
+        gamepad_update(&gamepad);
+
+        // Send gamepad to Python bridge and process responses
+        if (use_bridge) {
+            // Send gamepad state
+            python_bridge_send_gamepad(&bridge, &gamepad);
+
+            // Send tick to trigger state response
+            python_bridge_send_tick(&bridge, dt);
+
+            // Process incoming messages
+            if (python_bridge_update(&bridge)) {
+                // Got new state from Python - could update robot visualization here
+                RobotState* state = python_bridge_get_state(&bridge);
+                (void)state;  // Will use for robot rendering later
+            }
+
+            // Check if bridge disconnected
+            if (!bridge.connected) {
+                fprintf(stderr, "Python bridge disconnected\n");
+                use_bridge = false;
+            }
         }
 
         // Update camera
@@ -120,6 +221,10 @@ int main(int argc, char** argv) {
     }
 
     // Cleanup
+    if (use_bridge) {
+        python_bridge_destroy(&bridge);
+    }
+    gamepad_destroy(&gamepad);
     floor_destroy(&floor);
     platform_shutdown(&platform);
 

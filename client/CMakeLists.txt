@@ -25,6 +25,9 @@ set(SOURCES
     src/render/camera.cpp
     src/render/shader.cpp
     src/render/floor.cpp
+    src/ipc/subprocess.cpp
+    src/ipc/gamepad.cpp
+    src/ipc/python_bridge.cpp
 )
 
 # Executable
