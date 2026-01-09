@@ -1,8 +1,11 @@
 # VEX IQ Simulator Dependencies
+# ==============================
 
-# Core GUI and gamepad support
+# Tools directory dependencies (LDraw rendering, model conversion)
 pygame>=2.5.0
+Pillow>=10.0.0
+trimesh>=4.0.0
+pygltflib>=1.16.0
 
-# Future 3D support (uncomment when ready)
-# ursina>=5.0.0
-# PyOpenGL>=3.1.0
+# Note: simulator/ only needs Python standard library
+# The C++ client bundles its own Python for the robot harness

@@ -212,14 +212,60 @@ bool python_bridge_init(PythonBridge* bridge, const char* iqpython_path, const c
     memset(bridge, 0, sizeof(PythonBridge));
     bridge->tick_interval = 1.0 / 60.0;  // 60 Hz default
 
-    // Build command to run ipc_bridge.py
-    char command[512];
+    // Get path to bundled Python
+    // Exe is at: client/build-*/vexiq_sim
+    // Python is at: python-linux/bin/python3 or python-win/python.exe
+    char python_path[512];
+    char command[1024];
+
 #ifdef _WIN32
-    snprintf(command, sizeof(command), "python \"%s/ipc_bridge.py\" \"%s\"",
-             simulator_dir, iqpython_path);
+    // Get exe directory
+    char exe_dir[512];
+    GetModuleFileNameA(NULL, exe_dir, sizeof(exe_dir));
+    char* last_sep = strrchr(exe_dir, '\\');
+    if (last_sep) *last_sep = '\0';
+
+    // Try bundled Python first, fall back to system Python
+    snprintf(python_path, sizeof(python_path), "%s\\..\\..\\python-win\\python.exe", exe_dir);
+
+    // Check if bundled Python exists
+    DWORD attr = GetFileAttributesA(python_path);
+    if (attr == INVALID_FILE_ATTRIBUTES) {
+        // Fall back to system Python
+        strcpy(python_path, "python");
+        printf("[Bridge] Using system Python (bundled not found)\n");
+    } else {
+        printf("[Bridge] Using bundled Python: %s\n", python_path);
+    }
+
+    snprintf(command, sizeof(command), "\"%s\" \"%s\\ipc_bridge.py\" \"%s\"",
+             python_path, simulator_dir, iqpython_path);
 #else
-    snprintf(command, sizeof(command), "python3 \"%s/ipc_bridge.py\" \"%s\"",
-             simulator_dir, iqpython_path);
+    // Get exe directory via /proc/self/exe
+    char exe_dir[512];
+    ssize_t len = readlink("/proc/self/exe", exe_dir, sizeof(exe_dir) - 1);
+    if (len > 0) {
+        exe_dir[len] = '\0';
+        char* last_sep = strrchr(exe_dir, '/');
+        if (last_sep) *last_sep = '\0';
+    } else {
+        strcpy(exe_dir, ".");
+    }
+
+    // Try bundled Python first
+    snprintf(python_path, sizeof(python_path), "%s/../../python-linux/bin/python3", exe_dir);
+
+    // Check if bundled Python exists
+    if (access(python_path, X_OK) != 0) {
+        // Fall back to system Python
+        strcpy(python_path, "python3");
+        printf("[Bridge] Using system Python (bundled not found)\n");
+    } else {
+        printf("[Bridge] Using bundled Python: %s\n", python_path);
+    }
+
+    snprintf(command, sizeof(command), "\"%s\" \"%s/ipc_bridge.py\" \"%s\"",
+             python_path, simulator_dir, iqpython_path);
 #endif
 
     printf("[Bridge] Spawning: %s\n", command);

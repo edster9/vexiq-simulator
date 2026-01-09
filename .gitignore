@@ -77,6 +77,10 @@ last_run.log
 client/build-linux/
 client/build-windows/
 
+# Portable Python bundles (downloaded by scripts/setup_python.sh)
+python-linux/
+python-win/
+
 # 3D Models (large CAD files - STEP, OBJ, GLB)
 models/
 simulator/models/
