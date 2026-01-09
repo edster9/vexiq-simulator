@@ -5,6 +5,20 @@ LDraw Model Renderer for Ursina/Panda3D
 Reusable module for rendering LDraw MPD/LDR models in any Ursina application.
 Handles coordinate transforms, color application, and shader-based lighting.
 
+COORDINATE SYSTEM NOTES:
+------------------------
+LDraw uses: X=right, Y=down, Z=back
+Ursina uses: X=right, Y=up, Z=forward
+
+The coordinate transform applied is C*M*C where C = diag(1, -1, 1):
+- This flips Y only (not Z) for the rotation matrix
+- Position Y is negated, Z is kept as-is
+- This works because Panda3D's GLB loader may handle Z differently than raw OpenGL
+
+NOTE: The C++ renderer (client/src/main.cpp) uses C = diag(1, -1, -1) which flips
+both Y and Z. The difference is due to how Panda3D vs raw OpenGL handle glTF imports.
+Both produce correct visual results in their respective environments.
+
 Usage:
     from ldraw_renderer import LDrawModelRenderer, render_ldraw_model
 

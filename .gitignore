@@ -81,8 +81,8 @@ client/build-windows/
 python-linux/
 python-win/
 
-# 3D Models (large CAD files - STEP, OBJ, GLB)
-models/
+# 3D Part models (large GLB files - download separately)
+models/parts/
 simulator/models/
 
 # Extracted Python code from .iqpython files (auto-generated)

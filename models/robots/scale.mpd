@@ -1,0 +1,23 @@
+0 FILE main.ldr
+0 Name: test1
+0 !LICENSE Free for non-commercial use.
+1 14 -312 -16 256 -1 0 0 0 -1 0 0 0 1 228-2500-009-v2.dat
+1 14 -136 -16 400 0 0 -1 0 -1 0 -1 0 0 228-2500-009-v2.dat
+1 14 -136 -16 112 0 0 -1 0 -1 0 -1 0 0 228-2500-009-v2.dat
+1 14 40 -16 256 1 0 0 0 -1 0 0 0 -1 228-2500-009-v2.dat
+1 14 -136 56 488 0.259 0 0.966 0 -1 0 0.966 0 -0.259 228-2540c02.dat
+1 14 -200 56 256 0.259 0 0.966 0 -1 0 0.966 0 -0.259 406-3388-901.dat
+1 0 -208 56 8 0.259 0 0.966 0 -1 0 0.966 0 -0.259 406-3388-912.dat
+1 11 104 56 408 0.259 0 0.966 0 -1 0 0.966 0 -0.259 228-3012.dat
+1 14 64 56 336 0.259 0 0.966 0 -1 0 0.966 0 -0.259 228-3012.dat
+0 FILE VEXTreadClosed-1.ldr
+0 Author: LDCad
+0 !KEYWORDS flexible, chain
+0 !LDCAD CONTENT [type=path] [addFallBack=default] [looped=true] [displayKind=links] [curveStep=16] [displayLenCor=0]
+
+0 !LDCAD PATH_POINT [type=circle] [posOri=0 0 8 1 0 0 0 1 0 0 0 1] [prevCPDist=25] [nextCPDist=25] [cirR=41] [cirDir=xyCW] [prevYRoll=0] [nextYRoll=0]
+0 !LDCAD PATH_POINT [type=circle] [posOri=192 0 8 1 0 0 0 1 0 0 0 1] [prevCPDist=25] [nextCPDist=25] [cirR=41] [cirDir=xyCW] [prevYRoll=0] [nextYRoll=0]
+
+0 !LDCAD PATH_SKIN [donCol=16] [donOri=0 1 0 0 0 1 1 0 0] [donPart=228-2500-231.dat] [donYSize=100%] [donCen=partCen] [donCenYOfs=0] [donFinScale=none] [donPlace=refsStat] [donYAlign=1] [donInline=false] [segSize=16] [segSizeTol=0] [segsCnt=0] [segsGrp=0] [segsMaxMerge=1] [segsMrgAng=0] [segsMrgRollAng=0] [segsEdgeDelKind=keepFirstLeft]
+
+0 !LDCAD GENERATED [generator=LDCad 1.5]

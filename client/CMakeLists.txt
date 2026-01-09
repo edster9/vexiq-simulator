@@ -29,6 +29,7 @@ set(SOURCES
     src/render/mesh.cpp
     src/render/mpd_loader.cpp
     src/render/text.cpp
+    src/scene/scene.cpp
     src/ipc/subprocess.cpp
     src/ipc/gamepad.cpp
     src/ipc/python_bridge.cpp

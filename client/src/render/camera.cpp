@@ -43,22 +43,29 @@ void camera_update(OrbitCamera* cam, InputState* input, float dt) {
         float dy = (float)input->mouse_dy;
 
         if (shift_held) {
-            // Pan: move target in screen space
-            // Calculate camera right and up vectors in world space
+            // Pan: move target in camera's local screen space
+            // Compute camera's right and up vectors properly
             float cos_yaw = cosf(cam->yaw);
             float sin_yaw = sinf(cam->yaw);
+            float cos_pitch = cosf(cam->pitch);
+            float sin_pitch = sinf(cam->pitch);
 
-            // Right vector (always horizontal)
-            Vec3 right = vec3(cos_yaw, 0, sin_yaw);
+            // View direction (from camera toward target)
+            Vec3 forward = vec3(-sin_yaw * cos_pitch, sin_pitch, -cos_yaw * cos_pitch);
 
-            // Up vector (perpendicular to view direction, mostly vertical)
-            Vec3 up = vec3(0, 1, 0);
+            // Right vector = cross(forward, world_up), then normalize
+            // For a right-handed system: right = forward × up
+            Vec3 world_up = vec3(0, 1, 0);
+            Vec3 right = vec3_normalize(vec3_cross(forward, world_up));
+
+            // Camera up vector = cross(right, forward) for proper screen-space up
+            Vec3 up = vec3_cross(right, forward);
 
             // Scale pan by distance for consistent feel
             float pan_scale = cam->pan_sensitivity * cam->distance * 0.1f;
 
             // Blender-style pan: drag right = view moves right = target moves right
-            cam->target = vec3_add(cam->target, vec3_scale(right, dx * pan_scale));
+            cam->target = vec3_add(cam->target, vec3_scale(right, -dx * pan_scale));
             cam->target = vec3_add(cam->target, vec3_scale(up, dy * pan_scale));
         } else {
             // Orbit: rotate around target

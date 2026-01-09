@@ -1,6 +1,12 @@
 /*
  * MPD/LDR Loader for LDraw files
  * Parses Multi-Part Document files used by VEX IQ LDCad models
+ *
+ * This loader reads LDraw MPD files and produces a flat list of part placements.
+ * All positions and rotations are in LDraw coordinates (Y-down, Z-back).
+ * The rendering code (build_ldraw_model_matrix) handles conversion to OpenGL.
+ *
+ * See mpd_loader.cpp for detailed documentation on the LDraw file format.
  */
 
 #ifndef MPD_LOADER_H
@@ -57,12 +63,13 @@ void mpd_print_info(const MpdDocument* doc);
 // LDU to world units: LDraw uses LDU (0.4mm), our GLB models are 0.02x LDU scale
 #define LDU_SCALE 0.02f
 
-// Convert LDraw coordinates to world coordinates
-// LDraw: Y down, our world: Y up
+// Convert LDraw position to OpenGL world coordinates
+// LDraw: Y-down, Z-back -> OpenGL: Y-up, Z-front
+// Both Y and Z must be flipped for correct rendering
 static inline void ldraw_to_world(float lx, float ly, float lz, float* wx, float* wy, float* wz) {
     *wx = lx * LDU_SCALE;
-    *wy = -ly * LDU_SCALE;  // Flip Y
-    *wz = lz * LDU_SCALE;
+    *wy = -ly * LDU_SCALE;  // Flip Y (down -> up)
+    *wz = -lz * LDU_SCALE;  // Flip Z (back -> front)
 }
 
 #ifdef __cplusplus

@@ -1,6 +1,63 @@
 /*
  * GLB Loader Implementation
- * Parses binary glTF 2.0 files
+ * Parses binary glTF 2.0 files for VEX IQ part meshes
+ *
+ * =============================================================================
+ * GLB FILE FORMAT AND VEX IQ PART PIPELINE
+ * =============================================================================
+ *
+ * GLB is the binary container format for glTF 2.0, a standard 3D model format.
+ * We use GLB files for VEX IQ part meshes because:
+ *   - Compact binary format (faster loading than text-based formats)
+ *   - Industry standard with wide tool support
+ *   - Supports vertex colors (needed for part coloring)
+ *   - Y-up coordinate system matches OpenGL
+ *
+ * HOW VEX IQ PARTS BECOME GLB FILES:
+ *   1. Original parts are LDraw .dat files (text-based geometry)
+ *   2. Blender imports .dat files using the LDraw importer addon
+ *   3. Blender converts coordinates: LDraw Y-down -> Blender Z-up
+ *   4. Parts are scaled to 0.02x (so LDU * 0.02 = GLB units)
+ *   5. Vertex colors are set to white for colorable areas
+ *   6. Export as GLB with Y-up (glTF standard)
+ *   7. Result: GLB in OpenGL coordinates (Y-up, Z-front)
+ *
+ * VERTEX COLOR CONVENTION:
+ *   - White (1,1,1) = Colorable area - shader will tint with LDraw color
+ *   - Non-white = Baked color - shader preserves original color
+ *   - This allows parts like motors to have fixed black/green areas
+ *     while structural parts can be any color
+ *
+ * GLB STRUCTURE:
+ *   [12-byte header]
+ *     - magic: "glTF" (0x46546C67)
+ *     - version: 2
+ *     - length: total file size
+ *   [JSON chunk]
+ *     - chunk length
+ *     - chunk type: "JSON" (0x4E4F534A)
+ *     - JSON data describing meshes, accessors, buffer views
+ *   [BIN chunk]
+ *     - chunk length
+ *     - chunk type: "BIN\0" (0x004E4942)
+ *     - Binary data (vertices, indices, etc.)
+ *
+ * WHAT THIS LOADER EXTRACTS:
+ *   - Vertex positions (VEC3 float)
+ *   - Vertex normals (VEC3 float)
+ *   - Vertex colors (VEC3 or VEC4 float) - defaults to white if missing
+ *   - Triangle indices (SCALAR unsigned short or unsigned int)
+ *
+ * COORDINATE SYSTEM:
+ *   GLB files are in glTF standard coordinates:
+ *     - X: Right
+ *     - Y: Up
+ *     - Z: Front (toward viewer)
+ *   This matches OpenGL, so no conversion needed when rendering.
+ *   The coordinate conversion happens in build_ldraw_model_matrix()
+ *   which transforms the LDraw positions/rotations to OpenGL space.
+ *
+ * =============================================================================
  */
 
 #include "glb_loader.h"

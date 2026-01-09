@@ -1,6 +1,69 @@
 /*
  * MPD/LDR Loader Implementation
  * Parses LDraw Multi-Part Document files with submodel support
+ *
+ * =============================================================================
+ * LDRAW FILE FORMAT OVERVIEW
+ * =============================================================================
+ *
+ * LDraw is a CAD system for LEGO and compatible brick systems (including VEX IQ).
+ * VEX IQ parts are available as LDraw parts created by Philo (Philippe Hurbain).
+ *
+ * FILE TYPES:
+ *   .dat - Single part definition (primitive geometry)
+ *   .ldr - Model file (assembly of parts)
+ *   .mpd - Multi-Part Document (multiple .ldr models in one file)
+ *
+ * MPD STRUCTURE:
+ *   0 FILE ModelName.ldr       <- Start of a submodel
+ *   0 Name: ModelName          <- Optional name meta-command
+ *   1 <color> <x> <y> <z> <rotation matrix 9 values> <part.dat or submodel.ldr>
+ *   ...
+ *   0 FILE AnotherModel.ldr    <- Next submodel
+ *   ...
+ *
+ * TYPE 1 LINE FORMAT (part/submodel placement):
+ *   1 <color> <x> <y> <z> <a> <b> <c> <d> <e> <f> <g> <h> <i> <part>
+ *
+ *   - color: LDraw color code (see LDRAW_COLORS below)
+ *   - x, y, z: Position in LDU (LDraw Units)
+ *   - a-i: 3x3 rotation matrix in ROW-MAJOR order:
+ *       | a b c |
+ *       | d e f |
+ *       | g h i |
+ *   - part: Either a .dat part file or .ldr submodel reference
+ *
+ * COORDINATE SYSTEM (LDraw):
+ *   - X: Right
+ *   - Y: Down (gravity is +Y)
+ *   - Z: Back (away from viewer)
+ *   - Units: LDU where 1 LDU = 0.4mm
+ *
+ * COLOR INHERITANCE:
+ *   - Color 16 means "inherit from parent"
+ *   - When a submodel uses color 16, it takes the color specified by its parent
+ *   - This allows reusable submodels that can be different colors
+ *
+ * HIERARCHY FLATTENING:
+ *   This loader expands the submodel hierarchy into a flat list of parts.
+ *   Each part gets its final world position and composed rotation matrix.
+ *   The expand_submodel() function handles recursive composition:
+ *     - world_position = parent_position + parent_rotation * local_position
+ *     - world_rotation = parent_rotation * local_rotation
+ *
+ * VEX IQ PARTS:
+ *   VEX IQ parts use the 228-xxxx numbering scheme (228 = VEX IQ in LDraw).
+ *   Part files are named like: 228-2500-021.dat (structural beam)
+ *   Special parts include:
+ *     - 228-2560*.dat - Smart motors
+ *     - 228-2540*.dat - Robot brain
+ *     - 228-3010.dat  - Touch LED
+ *     - 228-3011.dat  - Bumper switch
+ *     - 228-3012.dat  - Color sensor
+ *     - 228-3014.dat  - Gyro sensor
+ *     - 228-2500-208/209.dat - Wheels and tires
+ *
+ * =============================================================================
  */
 
 #include "mpd_loader.h"

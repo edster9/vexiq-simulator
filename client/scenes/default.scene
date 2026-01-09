@@ -1,0 +1,13 @@
+# Default VEX IQ Scene
+# Two robots on the competition field
+
+name Default Scene
+
+# Robot definitions: robot <file> <x> <y> <z> [rotation_y_degrees]
+# Positions are in inches, rotation is degrees around Y axis
+
+# ClawbotIQ on the left side of the field
+robot ClawbotIQ.mpd -20 0 0 0
+
+# Ike on the right side of the field, facing the opposite direction
+robot Ike.mpd 20 0 0 180
