@@ -1337,6 +1337,7 @@ int main(int argc, char** argv) {
     printf("\nControls:\n");
     printf("  Robot 1: WASD        - Drive (W/S forward/back, A/D turn)\n");
     printf("  Robot 2: Arrow Keys  - Drive (Up/Down/Left/Right)\n");
+    printf("  Shift + Drive Keys   - Fine control (20%% speed)\n");
     printf("  Middle Mouse + Drag  - Orbit camera\n");
     printf("  Shift + MMB + Drag   - Pan camera\n");
     printf("  Scroll Wheel         - Zoom in/out\n");
@@ -1387,6 +1388,10 @@ int main(int argc, char** argv) {
         }
 
         // Robot driving controls (WASD for first robot, Arrow keys for second)
+        // Hold Shift for fine control (20% speed)
+        bool fine_control = input.keys[SDL_SCANCODE_LSHIFT] || input.keys[SDL_SCANCODE_RSHIFT];
+        float speed_multiplier = fine_control ? 0.2f : 1.0f;
+
         // First robot: WASD
         if (!robots.empty()) {
             float left_pct = 0.0f;
@@ -1412,7 +1417,7 @@ int main(int argc, char** argv) {
                 right_pct -= 20.0f;
             }
 
-            drivetrain_set_motors(&robots[0].drivetrain, left_pct, right_pct);
+            drivetrain_set_motors(&robots[0].drivetrain, left_pct * speed_multiplier, right_pct * speed_multiplier);
         }
 
         // Second robot: Arrow keys
@@ -1437,7 +1442,7 @@ int main(int argc, char** argv) {
                 right_pct -= 20.0f;
             }
 
-            drivetrain_set_motors(&robots[1].drivetrain, left_pct, right_pct);
+            drivetrain_set_motors(&robots[1].drivetrain, left_pct * speed_multiplier, right_pct * speed_multiplier);
         }
 
         // =====================================================================

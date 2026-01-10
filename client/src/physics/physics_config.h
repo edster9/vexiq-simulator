@@ -60,11 +60,12 @@ extern "C" {
 // =============================================================================
 
 // Linear damping (air resistance, rolling resistance)
-// Velocity decay factor per second (1.0 = no damping)
-#define VEXIQ_LINEAR_DAMPING 0.95f
+// Velocity decay factor per frame (1.0 = no damping)
+// Lower values = faster stopping when motors off
+#define VEXIQ_LINEAR_DAMPING 0.90f
 
 // Angular damping for rotation
-#define VEXIQ_ANGULAR_DAMPING 0.90f
+#define VEXIQ_ANGULAR_DAMPING 0.85f
 
 // Collision restitution (bounciness, 0 = no bounce, 1 = perfect bounce)
 #define VEXIQ_COLLISION_RESTITUTION 0.2f
