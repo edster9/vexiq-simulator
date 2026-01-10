@@ -17,6 +17,8 @@ extern "C" {
 // Maximum lengths for strings
 #define ROBOTDEF_MAX_NAME 128
 #define ROBOTDEF_MAX_SUBMODELS 64
+#define ROBOTDEF_MAX_WHEELS 8
+#define ROBOTDEF_MAX_WHEEL_PARTS 4
 
 // Drivetrain types
 typedef enum {
@@ -55,6 +57,17 @@ typedef struct {
     bool has_kinematics;
 } RobotDefSubmodel;
 
+// Wheel assembly (hub + tire that spin together)
+typedef struct {
+    char id[ROBOTDEF_MAX_NAME];           // e.g., "left_front"
+    float world_position[3];              // LDU - center of wheel
+    float spin_axis[3];                   // Axis of rotation (normalized)
+    float outer_diameter_mm;              // Wheel diameter
+    char part_numbers[ROBOTDEF_MAX_WHEEL_PARTS][32];  // Part numbers in this assembly
+    int part_count;
+    bool is_left;                         // true = left side, false = right
+} RobotDefWheelAssembly;
+
 // Complete robot definition
 typedef struct {
     // Metadata
@@ -72,6 +85,10 @@ typedef struct {
     // Submodels with kinematics
     RobotDefSubmodel submodels[ROBOTDEF_MAX_SUBMODELS];
     int submodel_count;
+
+    // Wheel assemblies
+    RobotDefWheelAssembly wheel_assemblies[ROBOTDEF_MAX_WHEELS];
+    int wheel_count;
 
     // Summary
     int total_wheels;

@@ -285,6 +285,17 @@ static void axis_gizmo_destroy(AxisGizmo* axis) {
 }
 // ============================================================================
 
+// Wheel assembly for a robot (runtime data)
+struct WheelAssembly {
+    float world_position[3];   // LDU - center of wheel
+    float spin_axis[3];        // Rotation axis (normalized)
+    float diameter_mm;         // For calculating spin rate
+    float spin_angle;          // Current rotation angle (radians)
+    char part_numbers[ROBOTDEF_MAX_WHEEL_PARTS][32];
+    int part_count;
+    bool is_left;
+};
+
 // Robot instance (loaded from scene)
 struct RobotInstance {
     float offset[3];      // World position offset (inches)
@@ -297,6 +308,10 @@ struct RobotInstance {
     float rotation_axis[3];    // Rotation axis (default: [0,1,0] = vertical)
     float track_width;         // Track width in LDU
     bool has_robotdef;         // Whether robotdef was loaded
+
+    // Wheel assemblies
+    WheelAssembly wheels[ROBOTDEF_MAX_WHEELS];
+    int wheel_count;
 };
 
 // Part instance for rendering
@@ -307,6 +322,8 @@ struct PartInstance {
     float color[3];       // RGB color (0-1)
     bool has_color;       // Whether to apply color override
     int robot_index;      // Which robot this part belongs to (-1 = no robot)
+    int wheel_index;      // Which wheel assembly this part belongs to (-1 = not a wheel)
+    char part_number[32]; // Part number for wheel matching
 };
 
 // Get the directory containing the executable
@@ -373,7 +390,9 @@ static Mat4 build_model_matrix(Vec3 pos, float rot_y, float scale) {
 // Build model matrix for LDraw parts (converts from LDraw to OpenGL coordinates)
 // pos: position in LDU, rot: 3x3 rotation matrix (row-major) from MPD file
 // robot: robot instance with offset and ground offset (can be NULL for no robot)
-static Mat4 build_ldraw_model_matrix(const float* pos, const float* rot, const RobotInstance* robot) {
+// wheel: wheel assembly for spin rotation (can be NULL for no wheel spin)
+static Mat4 build_ldraw_model_matrix(const float* pos, const float* rot, const RobotInstance* robot,
+                                      const WheelAssembly* wheel = nullptr) {
     // LDraw rotation matrix is row-major: [a b c] [d e f] [g h i]
     float a = rot[0], b = rot[1], c = rot[2];
     float d = rot[3], e = rot[4], f = rot[5];
@@ -383,6 +402,78 @@ static Mat4 build_ldraw_model_matrix(const float* pos, const float* rot, const R
     float px = pos[0];
     float py = pos[1];
     float pz = pos[2];
+
+    // Apply wheel spin rotation if present (before robot rotation)
+    if (wheel && wheel->spin_angle != 0.0f) {
+        // Wheel center in LDU
+        float cx = wheel->world_position[0];
+        float cy = wheel->world_position[1];
+        float cz = wheel->world_position[2];
+
+        // Rotation axis (already normalized)
+        float ax = wheel->spin_axis[0];
+        float ay = wheel->spin_axis[1];
+        float az = wheel->spin_axis[2];
+
+        // Rodrigues' rotation formula for position
+        float rel_x = px - cx;
+        float rel_y = py - cy;
+        float rel_z = pz - cz;
+
+        float cos_a = cosf(wheel->spin_angle);
+        float sin_a = sinf(wheel->spin_angle);
+        float one_minus_cos = 1.0f - cos_a;
+
+        // Cross product: axis x rel
+        float cross_x = ay * rel_z - az * rel_y;
+        float cross_y = az * rel_x - ax * rel_z;
+        float cross_z = ax * rel_y - ay * rel_x;
+
+        // Dot product: axis . rel
+        float dot = ax * rel_x + ay * rel_y + az * rel_z;
+
+        // Rotated position: rel*cos + (axis x rel)*sin + axis*(axis.rel)*(1-cos)
+        float rx = rel_x * cos_a + cross_x * sin_a + ax * dot * one_minus_cos;
+        float ry = rel_y * cos_a + cross_y * sin_a + ay * dot * one_minus_cos;
+        float rz = rel_z * cos_a + cross_z * sin_a + az * dot * one_minus_cos;
+
+        px = rx + cx;
+        py = ry + cy;
+        pz = rz + cz;
+
+        // Also rotate the orientation matrix using Rodrigues' formula
+        // For each column of the rotation matrix, rotate it around the axis
+        // Column 0 (a, d, g)
+        float c0_cross_x = ay * g - az * d;
+        float c0_cross_y = az * a - ax * g;
+        float c0_cross_z = ax * d - ay * a;
+        float c0_dot = ax * a + ay * d + az * g;
+        float na = a * cos_a + c0_cross_x * sin_a + ax * c0_dot * one_minus_cos;
+        float nd = d * cos_a + c0_cross_y * sin_a + ay * c0_dot * one_minus_cos;
+        float ng = g * cos_a + c0_cross_z * sin_a + az * c0_dot * one_minus_cos;
+
+        // Column 1 (b, e, h)
+        float c1_cross_x = ay * h - az * e;
+        float c1_cross_y = az * b - ax * h;
+        float c1_cross_z = ax * e - ay * b;
+        float c1_dot = ax * b + ay * e + az * h;
+        float nb = b * cos_a + c1_cross_x * sin_a + ax * c1_dot * one_minus_cos;
+        float ne = e * cos_a + c1_cross_y * sin_a + ay * c1_dot * one_minus_cos;
+        float nh = h * cos_a + c1_cross_z * sin_a + az * c1_dot * one_minus_cos;
+
+        // Column 2 (c, f, i)
+        float c2_cross_x = ay * i - az * f;
+        float c2_cross_y = az * c - ax * i;
+        float c2_cross_z = ax * f - ay * c;
+        float c2_dot = ax * c + ay * f + az * i;
+        float nc = c * cos_a + c2_cross_x * sin_a + ax * c2_dot * one_minus_cos;
+        float nf = f * cos_a + c2_cross_y * sin_a + ay * c2_dot * one_minus_cos;
+        float ni = i * cos_a + c2_cross_z * sin_a + az * c2_dot * one_minus_cos;
+
+        a = na; b = nb; c = nc;
+        d = nd; e = ne; f = nf;
+        g = ng; h = nh; i = ni;
+    }
 
     // Apply robot rotation if present (in LDraw space, before coordinate conversion)
     if (robot) {
@@ -661,10 +752,30 @@ int main(int argc, char** argv) {
                     robot.rotation_axis[2] = def.drivetrain.rotation_axis[2];
                     robot.track_width = def.drivetrain.track_width;
 
-                    printf("  Loaded robotdef: rotation_center=[%.1f, %.1f, %.1f] LDU, rotation_axis=[%.1f, %.1f, %.1f], track_width=%.1f LDU\n",
+                    // Load wheel assemblies
+                    robot.wheel_count = def.wheel_count;
+                    for (int w = 0; w < def.wheel_count && w < ROBOTDEF_MAX_WHEELS; w++) {
+                        const RobotDefWheelAssembly* src = &def.wheel_assemblies[w];
+                        WheelAssembly* dst = &robot.wheels[w];
+                        dst->world_position[0] = src->world_position[0];
+                        dst->world_position[1] = src->world_position[1];
+                        dst->world_position[2] = src->world_position[2];
+                        dst->spin_axis[0] = src->spin_axis[0];
+                        dst->spin_axis[1] = src->spin_axis[1];
+                        dst->spin_axis[2] = src->spin_axis[2];
+                        dst->diameter_mm = src->outer_diameter_mm;
+                        dst->spin_angle = 0.0f;
+                        dst->is_left = src->is_left;
+                        dst->part_count = src->part_count;
+                        for (int p = 0; p < src->part_count && p < ROBOTDEF_MAX_WHEEL_PARTS; p++) {
+                            strncpy(dst->part_numbers[p], src->part_numbers[p], 31);
+                        }
+                    }
+
+                    printf("  Loaded robotdef: rotation_center=[%.1f, %.1f, %.1f] LDU, rotation_axis=[%.1f, %.1f, %.1f], track_width=%.1f LDU, wheels=%d\n",
                            robot.rotation_center[0], robot.rotation_center[1], robot.rotation_center[2],
                            robot.rotation_axis[0], robot.rotation_axis[1], robot.rotation_axis[2],
-                           robot.track_width);
+                           robot.track_width, robot.wheel_count);
                 } else {
                     printf("  No robotdef found (tried: %s)\n", robotdef_path);
                 }
@@ -724,6 +835,20 @@ int main(int argc, char** argv) {
                     // Color 16 means "main color" - use default, don't override
                     inst.has_color = (part->color_code != 16);
                     inst.robot_index = current_robot_index;
+                    inst.wheel_index = -1;
+
+                    // Store normalized part number (strip .dat and variants)
+                    strncpy(inst.part_number, part->part_name, 31);
+                    inst.part_number[31] = '\0';
+                    // Strip .dat extension
+                    char* dot = strrchr(inst.part_number, '.');
+                    if (dot) *dot = '\0';
+                    // Strip c## suffix (LDraw composite parts)
+                    size_t len = strlen(inst.part_number);
+                    if (len > 3 && inst.part_number[len-3] == 'c' &&
+                        isdigit(inst.part_number[len-2]) && isdigit(inst.part_number[len-1])) {
+                        inst.part_number[len-3] = '\0';
+                    }
 
                     parts.push_back(inst);
                     total_triangles += mesh->index_count / 3;
@@ -741,10 +866,40 @@ int main(int argc, char** argv) {
             float pivot_gl_y = -robots[current_robot_index].rotation_center[1] * LDU_SCALE;
             robots[current_robot_index].ground_offset += pivot_gl_y;
 
-            printf("  Loaded %zu parts, ground offset: %.3f inches (pivot_y: %.3f)\n",
+            // Match parts to wheel assemblies by part number
+            int wheel_parts_matched = 0;
+            RobotInstance& r = robots[current_robot_index];
+            // Note: For now, use wheel 0 for left side, wheel 2 for right side (first of each)
+            // This makes all same-side wheels spin together (correct for tank drive)
+            int left_wheel_idx = -1, right_wheel_idx = -1;
+            for (int wi = 0; wi < r.wheel_count; wi++) {
+                if (r.wheels[wi].is_left && left_wheel_idx < 0) left_wheel_idx = wi;
+                if (!r.wheels[wi].is_left && right_wheel_idx < 0) right_wheel_idx = wi;
+            }
+
+            for (size_t pi = robot_part_start; pi < parts.size(); pi++) {
+                PartInstance& p = parts[pi];
+                // Check all wheels for matching part number
+                for (int wi = 0; wi < r.wheel_count; wi++) {
+                    WheelAssembly& w = r.wheels[wi];
+                    for (int wpi = 0; wpi < w.part_count; wpi++) {
+                        if (strcmp(p.part_number, w.part_numbers[wpi]) == 0) {
+                            // Assign to left or right wheel based on part X position
+                            // Negative X = left side, Positive X = right side
+                            p.wheel_index = (p.position[0] < 0) ? left_wheel_idx : right_wheel_idx;
+                            if (p.wheel_index >= 0) wheel_parts_matched++;
+                            break;
+                        }
+                    }
+                    if (p.wheel_index >= 0) break;
+                }
+            }
+
+            printf("  Loaded %zu parts, ground offset: %.3f inches (pivot_y: %.3f), wheel parts: %d\n",
                    parts.size() - robot_part_start,
                    robots[current_robot_index].ground_offset,
-                   pivot_gl_y);
+                   pivot_gl_y,
+                   wheel_parts_matched);
         }
 
         printf("\nScene loaded: %zu robots, %zu total parts, %zu unique meshes, %u triangles\n",
@@ -889,6 +1044,25 @@ int main(int argc, char** argv) {
             robot.offset[0] = robot.drivetrain.pos_x;
             robot.offset[2] = robot.drivetrain.pos_z;
             robot.rotation_y = robot.drivetrain.heading;
+
+            // Update wheel spin angles based on drivetrain velocity
+            for (int w = 0; w < robot.wheel_count; w++) {
+                WheelAssembly& wheel = robot.wheels[w];
+                // Get wheel velocity (left or right side)
+                float wheel_vel = wheel.is_left ?
+                    robot.drivetrain.left_velocity :
+                    robot.drivetrain.right_velocity;
+                // Convert diameter mm to radius in inches
+                float radius_in = (wheel.diameter_mm / 25.4f) / 2.0f;
+                if (radius_in > 0.0f) {
+                    // Angular velocity = linear velocity / radius
+                    float angular_vel = wheel_vel / radius_in;
+                    wheel.spin_angle += angular_vel * dt;
+                    // Keep angle in reasonable range
+                    while (wheel.spin_angle > 6.28318f) wheel.spin_angle -= 6.28318f;
+                    while (wheel.spin_angle < -6.28318f) wheel.spin_angle += 6.28318f;
+                }
+            }
         }
 
         // Update camera
@@ -912,10 +1086,15 @@ int main(int argc, char** argv) {
         for (const auto& part : parts) {
             // Get robot instance for this part (if any)
             const RobotInstance* robot = nullptr;
+            const WheelAssembly* wheel = nullptr;
             if (part.robot_index >= 0 && part.robot_index < (int)robots.size()) {
                 robot = &robots[part.robot_index];
+                // Get wheel assembly if this is a wheel part
+                if (part.wheel_index >= 0 && part.wheel_index < robot->wheel_count) {
+                    wheel = &robot->wheels[part.wheel_index];
+                }
             }
-            Mat4 model = build_ldraw_model_matrix(part.position, part.rotation, robot);
+            Mat4 model = build_ldraw_model_matrix(part.position, part.rotation, robot, wheel);
             const float* color = part.has_color ? part.color : nullptr;
             mesh_render(part.mesh, &model, &view, &projection, light_dir, color);
         }
@@ -951,10 +1130,14 @@ int main(int argc, char** argv) {
                 if (!part.mesh) continue;
 
                 const RobotInstance* robot = nullptr;
+                const WheelAssembly* wheel = nullptr;
                 if (part.robot_index >= 0 && part.robot_index < (int)robots.size()) {
                     robot = &robots[part.robot_index];
+                    if (part.wheel_index >= 0 && part.wheel_index < robot->wheel_count) {
+                        wheel = &robot->wheels[part.wheel_index];
+                    }
                 }
-                Mat4 model = build_ldraw_model_matrix(part.position, part.rotation, robot);
+                Mat4 model = build_ldraw_model_matrix(part.position, part.rotation, robot, wheel);
 
                 // Get color based on robot index
                 Vec3 color = vec3(0.5f, 0.5f, 0.5f);  // Gray for no robot

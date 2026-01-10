@@ -121,8 +121,8 @@ submodels:
     special_parts:
       - part: 228-2540c02
         category: brain
-        type: brain:brain_with_battery
-        name: "Robot Brain with Battery"
+        type: brain:brain
+        name: "Robot Brain"
         position: [0.0, -112.0, 112.0]
 
   ShoulderMountA.ldr:

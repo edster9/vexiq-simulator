@@ -71,9 +71,11 @@ bool robotdef_load(const char* path, RobotDef* def) {
 
     char line[512];
     int indent = 0;
-    enum { SECTION_NONE, SECTION_SUMMARY, SECTION_DRIVETRAIN, SECTION_MOTORS, SECTION_SUBMODELS } section = SECTION_NONE;
+    enum { SECTION_NONE, SECTION_SUMMARY, SECTION_DRIVETRAIN, SECTION_MOTORS, SECTION_SUBMODELS, SECTION_WHEEL_ASSEMBLIES } section = SECTION_NONE;
     int current_motor = -1;
     int current_submodel = -1;
+    int current_wheel = -1;
+    bool in_wheel_parts = false;
 
     while (fgets(line, sizeof(line), f)) {
         // Remove newline
@@ -106,6 +108,10 @@ bool robotdef_load(const char* path, RobotDef* def) {
             } else if (starts_with(trimmed, "submodels:")) {
                 section = SECTION_SUBMODELS;
                 current_submodel = -1;
+            } else if (starts_with(trimmed, "wheel_assemblies:")) {
+                section = SECTION_WHEEL_ASSEMBLIES;
+                current_wheel = -1;
+                in_wheel_parts = false;
             }
             continue;
         }
@@ -196,6 +202,56 @@ bool robotdef_load(const char* path, RobotDef* def) {
                 }
                 break;
 
+            case SECTION_WHEEL_ASSEMBLIES:
+                // Wheel assembly ID at indent 2 (e.g., "left_front:")
+                if (indent == 2 && strchr(trimmed, ':') && !starts_with(trimmed, "- ")) {
+                    current_wheel++;
+                    in_wheel_parts = false;
+                    if (current_wheel < ROBOTDEF_MAX_WHEELS) {
+                        def->wheel_count = current_wheel + 1;
+                        // Extract ID (everything before the colon)
+                        char id[ROBOTDEF_MAX_NAME];
+                        strncpy(id, trimmed, ROBOTDEF_MAX_NAME - 1);
+                        char* colon = strchr(id, ':');
+                        if (colon) *colon = '\0';
+                        strncpy(def->wheel_assemblies[current_wheel].id, id, ROBOTDEF_MAX_NAME - 1);
+                        // Determine left/right from ID
+                        def->wheel_assemblies[current_wheel].is_left = (strstr(id, "left") != NULL);
+                    }
+                } else if (current_wheel >= 0 && current_wheel < ROBOTDEF_MAX_WHEELS) {
+                    RobotDefWheelAssembly* wa = &def->wheel_assemblies[current_wheel];
+                    if (indent == 4) {
+                        if (starts_with(trimmed, "world_position:")) {
+                            parse_float_array(trimmed, wa->world_position, 3);
+                        } else if (starts_with(trimmed, "spin_axis:")) {
+                            parse_float_array(trimmed, wa->spin_axis, 3);
+                        } else if (starts_with(trimmed, "outer_diameter_mm:")) {
+                            wa->outer_diameter_mm = (float)atof(get_value(trimmed));
+                        } else if (starts_with(trimmed, "parts:")) {
+                            in_wheel_parts = true;
+                        }
+                    } else if (indent == 6 && in_wheel_parts) {
+                        // Parse "- part: 228-2500-208"
+                        if (starts_with(trimmed, "- part:")) {
+                            if (wa->part_count < ROBOTDEF_MAX_WHEEL_PARTS) {
+                                const char* val = get_value(trimmed);
+                                strncpy(wa->part_numbers[wa->part_count], val, 31);
+                                wa->part_numbers[wa->part_count][31] = '\0';
+                                // Strip c## suffix (LDraw composite parts)
+                                char* pn = wa->part_numbers[wa->part_count];
+                                size_t len = strlen(pn);
+                                if (len > 3 && pn[len-3] == 'c' &&
+                                    isdigit((unsigned char)pn[len-2]) &&
+                                    isdigit((unsigned char)pn[len-1])) {
+                                    pn[len-3] = '\0';
+                                }
+                                wa->part_count++;
+                            }
+                        }
+                    }
+                }
+                break;
+
             default:
                 break;
         }
@@ -245,6 +301,20 @@ void robotdef_print(const RobotDef* def) {
                    def->motors[i].submodel,
                    def->motors[i].port,
                    def->motors[i].count);
+        }
+    }
+
+    if (def->wheel_count > 0) {
+        printf("  Wheel Assemblies:\n");
+        for (int i = 0; i < def->wheel_count; i++) {
+            const RobotDefWheelAssembly* wa = &def->wheel_assemblies[i];
+            printf("    - %s (%s): pos=[%.1f,%.1f,%.1f] axis=[%.2f,%.2f,%.2f] dia=%.1fmm parts=%d\n",
+                   wa->id,
+                   wa->is_left ? "left" : "right",
+                   wa->world_position[0], wa->world_position[1], wa->world_position[2],
+                   wa->spin_axis[0], wa->spin_axis[1], wa->spin_axis[2],
+                   wa->outer_diameter_mm,
+                   wa->part_count);
         }
     }
 }
