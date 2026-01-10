@@ -206,7 +206,7 @@ motors:
 wheel_assemblies:
   left_front:
     world_position: [58.0, -80.0, -96.0]
-    spin_axis: [0.000, -1.000, 0.000]
+    spin_axis: [1.000, 0.000, 0.000]
     outer_diameter_mm: 44.0
     wheel_type: hub  # tire | omni | mecanum | wheel
     parts:
@@ -216,7 +216,7 @@ wheel_assemblies:
         local_position: [-86, -16, -112]
   left_rear:
     world_position: [58.0, -80.0, 160.0]
-    spin_axis: [0.000, -1.000, 0.000]
+    spin_axis: [1.000, 0.000, 0.000]
     outer_diameter_mm: 44.0
     wheel_type: hub  # tire | omni | mecanum | wheel
     parts:
@@ -226,7 +226,7 @@ wheel_assemblies:
         local_position: [-86, -16, 144]
   right_front:
     world_position: [-58.0, -80.0, -96.0]
-    spin_axis: [0.000, 1.000, 0.000]
+    spin_axis: [-1.000, 0.000, 0.000]
     outer_diameter_mm: 44.0
     wheel_type: hub  # tire | omni | mecanum | wheel
     parts:
@@ -236,7 +236,7 @@ wheel_assemblies:
         local_position: [86, -16, -112]
   right_rear:
     world_position: [-58.0, -80.0, 160.0]
-    spin_axis: [0.000, 1.000, 0.000]
+    spin_axis: [-1.000, 0.000, 0.000]
     outer_diameter_mm: 44.0
     wheel_type: hub  # tire | omni | mecanum | wheel
     parts:

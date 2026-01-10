@@ -1031,6 +1031,22 @@ int main(int argc, char** argv) {
                 if (radius_in > 0.0f) {
                     // Angular velocity = linear velocity / radius
                     float angular_vel = wheel_vel / radius_in;
+                    // Account for spin axis direction: if axis points in negative
+                    // principal direction, negate to keep consistent visual rotation
+                    float ax = fabsf(wheel.spin_axis[0]);
+                    float ay = fabsf(wheel.spin_axis[1]);
+                    float az = fabsf(wheel.spin_axis[2]);
+                    if (ax >= ay && ax >= az) {
+                        if (wheel.spin_axis[0] < 0) angular_vel = -angular_vel;
+                    } else if (ay >= ax && ay >= az) {
+                        if (wheel.spin_axis[1] < 0) angular_vel = -angular_vel;
+                    } else {
+                        if (wheel.spin_axis[2] < 0) angular_vel = -angular_vel;
+                    }
+                    // During turning (opposite velocities), flip spin direction
+                    if (robot.drivetrain.left_velocity * robot.drivetrain.right_velocity < 0) {
+                        angular_vel = -angular_vel;
+                    }
                     wheel.spin_angle += angular_vel * dt;
                     // Keep angle in reasonable range
                     while (wheel.spin_angle > 6.28318f) wheel.spin_angle -= 6.28318f;

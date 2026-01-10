@@ -490,13 +490,19 @@ def generate_yaml(doc: LDrawDocument, submodels: Dict[str, SubmodelInfo]) -> str
         is_powered = info.motor_count > 0
 
         # Extract spin axis from wheel's rotation matrix
-        # The wheel's local Y-axis (axle) transformed to world space
-        # Rotation matrix columns: [X-axis, Y-axis, Z-axis]
-        # For a 3x3 matrix (a,b,c,d,e,f,g,h,i): col1 = (b, e, h) is local Y in world
+        # The wheel's local Y-axis (axle) transformed to submodel space
+        # Column 1 of the rotation matrix = (m[1], m[4], m[7]) = local Y in submodel coords
         first_wheel = parts[0]
-        m = first_wheel.rotation_matrix  # (a, b, c, d, e, f, g, h, i)
-        # Local Y-axis transformed = column 1 of matrix = (m[1], m[4], m[7])
+        m = first_wheel.rotation_matrix
         spin_axis = (m[1], m[4], m[7])
+
+        # Heuristic: if spin axis is vertical (Y-dominant), it's likely wrong.
+        # Tank drive wheels spin around a horizontal axis. Use X-axis based on side.
+        abs_x, abs_y, abs_z = abs(spin_axis[0]), abs(spin_axis[1]), abs(spin_axis[2])
+        if abs_y > abs_x and abs_y > abs_z:
+            # Vertical spin axis detected - use horizontal X-axis instead
+            # Left side: +X, Right side: -X (outward-facing axles)
+            spin_axis = (1.0, 0.0, 0.0) if side == 'left' else (-1.0, 0.0, 0.0)
 
         wheel_assemblies.append({
             'id': None,  # Will assign after sorting
