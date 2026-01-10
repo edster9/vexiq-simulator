@@ -78,7 +78,6 @@
 #include "scene/scene.h"
 #include "physics/drivetrain.h"
 #include "physics/robotdef.h"
-#include "physics/collision.h"
 #include "physics/obb.h"
 #include "ipc/gamepad.h"
 #include "ipc/python_bridge.h"
@@ -327,9 +326,6 @@ struct RobotInstance {
     // Wheel assemblies
     WheelAssembly wheels[ROBOTDEF_MAX_WHEELS];
     int wheel_count;
-
-    // Collision (legacy circle)
-    float collision_radius;    // Computed from bounding box (max XZ extent from center)
 
     // Hierarchical OBB collision data (in robot-local OpenGL coordinates)
     OBB submodel_obbs[MAX_ROBOT_SUBMODELS];  // OBBs for each submodel
@@ -1022,10 +1018,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Initialize collision world
-    CollisionWorld collision_world;
-    collision_init(&collision_world, FIELD_WIDTH, FIELD_DEPTH);
-
     // Initialize axis gizmo (normalized 1.0 length for screen-space rendering)
     AxisGizmo axis_gizmo;
     axis_gizmo_init(&axis_gizmo, 1.0f);
@@ -1301,49 +1293,11 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Compute collision radius from parts' bounding boxes
-            // Find max XZ extent from robot center (rotation_center)
-            float max_radius_sq = 0.0f;
-            float cx = robots[current_robot_index].rotation_center[0] * LDU_SCALE;
-            float cz = -robots[current_robot_index].rotation_center[2] * LDU_SCALE;  // Z flipped
-
-            for (size_t pi = robot_part_start; pi < parts.size(); pi++) {
-                const PartInstance& p = parts[pi];
-                if (!p.mesh) continue;
-
-                // Transform bounding box corners to world space (at identity rotation)
-                // and find max distance from rotation center in XZ plane
-                for (int corner = 0; corner < 8; corner++) {
-                    float lx = (corner & 1) ? p.mesh->max_bounds[0] : p.mesh->min_bounds[0];
-                    float lz = (corner & 4) ? p.mesh->max_bounds[2] : p.mesh->min_bounds[2];
-
-                    // Apply part position (LDraw coords -> GL coords)
-                    float wx = p.position[0] * LDU_SCALE + lx;
-                    float wz = -p.position[2] * LDU_SCALE + lz;  // Z flipped
-
-                    // Distance from rotation center
-                    float dx = wx - cx;
-                    float dz = wz - cz;
-                    float dist_sq = dx * dx + dz * dz;
-                    if (dist_sq > max_radius_sq) max_radius_sq = dist_sq;
-                }
-            }
-
-            robots[current_robot_index].collision_radius = sqrtf(max_radius_sq);
-            if (robots[current_robot_index].collision_radius < 3.0f) {
-                robots[current_robot_index].collision_radius = 6.0f;  // Fallback minimum
-            }
-
-            // Add robot to collision world with computed radius
-            collision_add_robot(&collision_world, scene_robot->x, scene_robot->z,
-                               robots[current_robot_index].collision_radius);
-
-            printf("  Loaded %zu parts, ground offset: %.3f inches (pivot_y: %.3f), wheel parts: %d, collision radius: %.1f\"\n",
+            printf("  Loaded %zu parts, ground offset: %.3f inches (pivot_y: %.3f), wheel parts: %d\n",
                    parts.size() - robot_part_start,
                    robots[current_robot_index].ground_offset,
                    pivot_gl_y,
-                   wheel_parts_matched,
-                   robots[current_robot_index].collision_radius);
+                   wheel_parts_matched);
         }
 
         // Load cylinders from scene
@@ -1351,7 +1305,6 @@ int main(int argc, char** argv) {
             const SceneCylinder* cyl = &scene.cylinders[i];
             objects_add_cylinder(&game_objects, cyl->x, cyl->z, cyl->radius, cyl->height,
                                 cyl->r, cyl->g, cyl->b);
-            collision_add_cylinder(&collision_world, cyl->x, cyl->z, cyl->radius);
         }
 
         printf("\nScene loaded: %zu robots, %zu total parts, %zu unique meshes, %u triangles, %u cylinders\n",
@@ -1380,7 +1333,6 @@ int main(int argc, char** argv) {
 
     // Debug display flags
     bool show_bounding_boxes = false;
-    bool show_robot_bounds = true;  // Show combined robot bounding box
 
     printf("\nControls:\n");
     printf("  Robot 1: WASD        - Drive (W/S forward/back, A/D turn)\n");
@@ -1490,65 +1442,19 @@ int main(int argc, char** argv) {
 
         // =====================================================================
         // Physics update order:
-        // 1. Check collisions at current positions and calculate forces
-        // 2. Apply collision forces to drivetrains
-        // 3. Update drivetrain physics (processes forces, updates positions)
-        // 4. Sync positions for rendering
+        // 1. Update drivetrain physics (motor forces only - circle collider disabled)
+        // 2. Sync positions for rendering
+        // 3. Run hierarchical OBB collision detection (detection only, no physics)
         // =====================================================================
 
-        // Step 1: Update collision world with current positions
-        for (size_t i = 0; i < robots.size(); i++) {
-            collision_update_robot(&collision_world, (int)i,
-                                  robots[i].drivetrain.pos_x,
-                                  robots[i].drivetrain.pos_z);
-        }
-
-        // Step 2: Calculate collision forces and apply them to drivetrains
-        // Gather velocities for damping
-        float robot_velocities[COLLISION_MAX_ROBOTS * 2];
-        for (size_t i = 0; i < robots.size(); i++) {
-            robot_velocities[i * 2] = robots[i].drivetrain.vel_x;
-            robot_velocities[i * 2 + 1] = robots[i].drivetrain.vel_z;
-        }
-
-        CollisionResult collision_results[COLLISION_MAX_ROBOTS];
-        if (collision_resolve_forces(&collision_world, robot_velocities, collision_results)) {
-            for (size_t i = 0; i < robots.size(); i++) {
-                drivetrain_apply_force(&robots[i].drivetrain,
-                                      collision_results[i].force_x,
-                                      collision_results[i].force_z);
-            }
-        }
-
-        // Step 3: Update drivetrain physics (processes motor + collision forces)
+        // Update drivetrain physics (motor forces only)
         for (auto& robot : robots) {
             drivetrain_update(&robot.drivetrain, dt);
         }
 
-        // Step 3b: Position clamp and velocity zero (inelastic collision)
-        for (size_t i = 0; i < robots.size(); i++) {
-            collision_update_robot(&collision_world, (int)i,
-                                  robots[i].drivetrain.pos_x,
-                                  robots[i].drivetrain.pos_z);
-        }
-        float clamped_positions[COLLISION_MAX_ROBOTS * 2];
-        collision_clamp_positions(&collision_world, clamped_positions);
-        for (size_t i = 0; i < robots.size(); i++) {
-            float old_x = robots[i].drivetrain.pos_x;
-            float old_z = robots[i].drivetrain.pos_z;
-            float new_x = clamped_positions[i * 2];
-            float new_z = clamped_positions[i * 2 + 1];
-
-            // If position was clamped, zero velocity in that direction
-            if (new_x != old_x) {
-                robots[i].drivetrain.pos_x = new_x;
-                robots[i].drivetrain.vel_x = 0.0f;
-            }
-            if (new_z != old_z) {
-                robots[i].drivetrain.pos_z = new_z;
-                robots[i].drivetrain.vel_z = 0.0f;
-            }
-        }
+        // NOTE: Circle collider disabled for OBB testing
+        // Robots can now pass through each other and walls
+        // TODO: Re-enable or replace with OBB-based collision response
 
         // Step 4: Sync drivetrain positions back to robot for rendering
         for (auto& robot : robots) {
@@ -1716,14 +1622,6 @@ int main(int argc, char** argv) {
                 };
                 for (int e = 0; e < 12; e++) {
                     debug_draw_line(corners[edges[e][0]], corners[edges[e][1]], color);
-                }
-            }
-
-            // Draw legacy collision circle (for comparison during transition)
-            if (show_robot_bounds) {
-                for (size_t i = 0; i < robots.size(); i++) {
-                    Vec3 collision_center = vec3(robots[i].offset[0], 2.0f, robots[i].offset[2]);
-                    debug_draw_cylinder(collision_center, robots[i].collision_radius, 2.0f, vec3(0.3f, 0.3f, 0.3f));
                 }
             }
 
