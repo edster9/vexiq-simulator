@@ -294,6 +294,7 @@ struct RobotInstance {
 
     // From robotdef
     float rotation_center[3];  // Drivetrain center in LDU (converted to world coords for rotation)
+    float rotation_axis[3];    // Rotation axis (default: [0,1,0] = vertical)
     float track_width;         // Track width in LDU
     bool has_robotdef;         // Whether robotdef was loaded
 };
@@ -630,6 +631,9 @@ int main(int argc, char** argv) {
             robot.rotation_center[0] = 0.0f;
             robot.rotation_center[1] = 0.0f;
             robot.rotation_center[2] = 0.0f;
+            robot.rotation_axis[0] = 0.0f;
+            robot.rotation_axis[1] = 1.0f;  // Default: vertical rotation
+            robot.rotation_axis[2] = 0.0f;
             robot.track_width = 0.0f;
 
             // Try to load robotdef file
@@ -651,10 +655,15 @@ int main(int argc, char** argv) {
                     robot.rotation_center[0] = def.drivetrain.rotation_center[0];
                     robot.rotation_center[1] = def.drivetrain.rotation_center[1];
                     robot.rotation_center[2] = def.drivetrain.rotation_center[2];
+                    // Store rotation axis
+                    robot.rotation_axis[0] = def.drivetrain.rotation_axis[0];
+                    robot.rotation_axis[1] = def.drivetrain.rotation_axis[1];
+                    robot.rotation_axis[2] = def.drivetrain.rotation_axis[2];
                     robot.track_width = def.drivetrain.track_width;
 
-                    printf("  Loaded robotdef: rotation_center=[%.1f, %.1f, %.1f] LDU, track_width=%.1f LDU\n",
+                    printf("  Loaded robotdef: rotation_center=[%.1f, %.1f, %.1f] LDU, rotation_axis=[%.1f, %.1f, %.1f], track_width=%.1f LDU\n",
                            robot.rotation_center[0], robot.rotation_center[1], robot.rotation_center[2],
+                           robot.rotation_axis[0], robot.rotation_axis[1], robot.rotation_axis[2],
                            robot.track_width);
                 } else {
                     printf("  No robotdef found (tried: %s)\n", robotdef_path);
@@ -725,9 +734,17 @@ int main(int argc, char** argv) {
 
             // Compute ground offset for this robot
             robots[current_robot_index].ground_offset = compute_ground_offset(parts, current_robot_index);
-            printf("  Loaded %zu parts, ground offset: %.3f inches\n",
+
+            // Adjust ground offset for rotation center Y position
+            // Rendering applies: wy = wy - pivot_gl_y + ground_offset
+            // The pivot_gl_y offset shifts all parts, so ground_offset must compensate
+            float pivot_gl_y = -robots[current_robot_index].rotation_center[1] * LDU_SCALE;
+            robots[current_robot_index].ground_offset += pivot_gl_y;
+
+            printf("  Loaded %zu parts, ground offset: %.3f inches (pivot_y: %.3f)\n",
                    parts.size() - robot_part_start,
-                   robots[current_robot_index].ground_offset);
+                   robots[current_robot_index].ground_offset,
+                   pivot_gl_y);
         }
 
         printf("\nScene loaded: %zu robots, %zu total parts, %zu unique meshes, %u triangles\n",

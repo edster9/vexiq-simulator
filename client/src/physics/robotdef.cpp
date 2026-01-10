@@ -54,6 +54,10 @@ void robotdef_init(RobotDef* def) {
     memset(def, 0, sizeof(RobotDef));
     def->version = 1;
     def->drivetrain.type = DRIVETRAIN_UNKNOWN;
+    // Default rotation axis is vertical (Y-up)
+    def->drivetrain.rotation_axis[0] = 0.0f;
+    def->drivetrain.rotation_axis[1] = 1.0f;
+    def->drivetrain.rotation_axis[2] = 0.0f;
 }
 
 bool robotdef_load(const char* path, RobotDef* def) {
@@ -138,6 +142,8 @@ bool robotdef_load(const char* path, RobotDef* def) {
                     strncpy(def->drivetrain.right_drive, get_value(trimmed), ROBOTDEF_MAX_NAME - 1);
                 } else if (starts_with(trimmed, "rotation_center:")) {
                     parse_float_array(trimmed, def->drivetrain.rotation_center, 3);
+                } else if (starts_with(trimmed, "rotation_axis:")) {
+                    parse_float_array(trimmed, def->drivetrain.rotation_axis, 3);
                 } else if (starts_with(trimmed, "track_width:")) {
                     def->drivetrain.track_width = (float)atof(get_value(trimmed));
                 } else if (starts_with(trimmed, "wheel_diameter:")) {
@@ -226,6 +232,10 @@ void robotdef_print(const RobotDef* def) {
            def->drivetrain.rotation_center[0],
            def->drivetrain.rotation_center[1],
            def->drivetrain.rotation_center[2]);
+    printf("    Rotation Axis: [%.1f, %.1f, %.1f]\n",
+           def->drivetrain.rotation_axis[0],
+           def->drivetrain.rotation_axis[1],
+           def->drivetrain.rotation_axis[2]);
     printf("    Track Width: %.1f LDU\n", def->drivetrain.track_width);
 
     if (def->motor_count > 0) {

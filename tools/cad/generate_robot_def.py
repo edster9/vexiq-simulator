@@ -153,9 +153,10 @@ def classify_part(part_number: str) -> Optional[Tuple[str, Dict]]:
     """
     catalog = get_catalog()
 
-    # Normalize: remove .dat extension, handle -v2 variants
+    # Normalize: remove .dat extension, handle variants
     base = part_number.replace('.dat', '').replace('.DAT', '')
-    base = re.sub(r'-v\d+$', '', base)  # Remove version suffix
+    base = re.sub(r'-v\d+$', '', base)  # Remove version suffix (-v2)
+    base = re.sub(r'c\d+$', '', base)   # Remove LDraw composite suffix (c01, c02)
 
     if base in catalog['parts']:
         info = catalog['parts'][base]

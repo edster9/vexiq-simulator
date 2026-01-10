@@ -1,11 +1,8 @@
 # Robot Definition File
 # Generated from: Ike.mpd
 # 
-# This file describes the robot's structure and can be extended with:
-#   - rotation_axis: Define pivot points for articulated parts
-#   - rotation_limits: min/max angles for joints
-#   - wheel_config: drivetrain setup (left/right, diameter, etc.)
-#   - sensor_ports: Map sensors to VEX IQ ports
+# This file describes the robot's structure for simulation.
+# Extend with kinematics, port mappings, and code bindings.
 
 version: 1
 source_file: Ike.mpd
@@ -14,10 +11,11 @@ main_model: main.ldr
 # Summary
 summary:
   total_submodels: 20
-  total_wheels: 0
-  total_motors: 4
-  total_sensors: 0
   has_brain: true
+  total_motors: 4
+  total_wheels: 4
+  total_gears: 17
+  total_brains: 1
 
 # Submodel Hierarchy
 hierarchy:
@@ -33,271 +31,237 @@ hierarchy:
       - head.ldr
 
 # Detailed Submodel Definitions
-# Add rotation_axis, rotation_limits, etc. to articulated parts
 submodels:
   main.ldr:
     position: [0, 0, 0]
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   wheelsleft.ldr:
     position: [144.0, -64.0, 16.0]
     parent: main.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2560
+        category: motor
         type: motor:smart_motor
+        name: "Smart Motor"
         position: [16.0, -16.0, 16.0]
+      - part: 228-2500-208c02
+        category: wheel
+        type: wheel:hub
+        name: "Small Wheel Hub (44 mm)"
+        position: [-86.0, -16.0, 144.0]
+      - part: 228-2500-208c02
+        category: wheel
+        type: wheel:hub
+        name: "Small Wheel Hub (44 mm)"
+        position: [-86.0, -16.0, -112.0]
 
   wheelsright.ldr:
     position: [-144.0, -64.0, 16.0]
     parent: main.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2560
+        category: motor
         type: motor:smart_motor
+        name: "Smart Motor"
         position: [-16.0, -16.0, 16.0]
+      - part: 228-2500-208c02
+        category: wheel
+        type: wheel:hub
+        name: "Small Wheel Hub (44 mm)"
+        position: [86.0, -16.0, 144.0]
+      - part: 228-2500-208c02
+        category: wheel
+        type: wheel:hub
+        name: "Small Wheel Hub (44 mm)"
+        position: [86.0, -16.0, -112.0]
 
   torso.ldr:
     position: [0.0, -369.429, 13.5522]
     parent: main.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2540c02
-        type: brain:robot_brain_with_battery
+        category: brain
+        type: brain:brain
+        name: "Robot Brain"
         position: [0.0, 8.7722, 27.0216]
 
   torsomotor.ldr:
     position: [-80.0, 181.103, 51.8039]
     parent: torso.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2560
+        category: motor
         type: motor:smart_motor
+        name: "Smart Motor"
         position: [0.0, 0.0, 0.0]
 
   torsomotorcable.ldr:
     position: [15.0, 159.365, -136.935]
     parent: torso.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   torsomotorcable_subPart1.ldr:
     position: [0.0, 0.0, 0.0]
     parent: torsomotorcable.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   rightmotorcable.ldr:
     position: [-33.0, -80.0, -35.0]
     parent: main.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   rightmotorcable_subPart1.ldr:
     position: [0.0, 0.0, 0.0]
     parent: rightmotorcable.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   leftmotorcable.ldr:
     position: [33.0, -80.0, -35.0]
     parent: main.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   leftmotorcable_subPart1.ldr:
     position: [0.0, 0.0, 0.0]
     parent: leftmotorcable.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   shoulders.ldr:
     position: [0.0, 0.0, 0.0]
     parent: arms.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2560
+        category: motor
         type: motor:smart_motor
+        name: "Smart Motor"
         position: [48.0, 16.0, 16.0]
 
   leftarm.ldr:
     position: [144.0, 48.0, 16.0]
     parent: arms.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   HandRubberBand.ldr:
     position: [-112.0, 8.0, -336.0]
     parent: rightarm.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   ArmRubberBand.ldr:
     position: [-96.0, -48.0, 0.0]
     parent: rightarm.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   arms.ldr:
     position: [0.0, -387.207, 139.526]
     parent: main.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   rightarm.ldr:
     position: [-144.0, 48.0, 16.0]
     parent: arms.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   armsmotorcable.ldr:
     position: [83.0, -279.104, 109.672]
     parent: main.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   armsmotorcable_subPart1.ldr:
     position: [0.0, 0.0, 0.0]
     parent: armsmotorcable.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   head.ldr:
     position: [-16.0, -669.18, 42.2485]
     parent: main.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
-
-# Drivetrain Configuration
-# Defines the robot's rotation center and drive geometry
-drivetrain:
-  type: tank  # tank (skid-steer) | mecanum | omni | ackermann
-  left_drive: wheelsleft.ldr
-  right_drive: wheelsright.ldr
-  # Rotation center (midpoint between drive assemblies)
-  # Detected via naming pattern
-  rotation_center: [0.0, -64.0, 16.0]
-  track_width: 288.0  # Distance between left and right wheels (LDU)
-  # wheel_diameter: 44  # mm - set based on wheel type used
-
-# Wheel Configuration
-# Identify which submodels contain drive wheels
-wheels:
-  # No wheel parts detected
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
 # Motor Configuration
 motors:
   - submodel: wheelsleft.ldr
     count: 1
-    # port: 1-12  # VEX IQ port number
-    # purpose: drive | arm | intake | etc
-    port: null
+    port: null  # 1-12
+    purpose: null  # drive | arm | intake | etc
   - submodel: wheelsright.ldr
     count: 1
-    # port: 1-12  # VEX IQ port number
-    # purpose: drive | arm | intake | etc
-    port: null
+    port: null  # 1-12
+    purpose: null  # drive | arm | intake | etc
   - submodel: torsomotor.ldr
     count: 1
-    # port: 1-12  # VEX IQ port number
-    # purpose: drive | arm | intake | etc
-    port: null
+    port: null  # 1-12
+    purpose: null  # drive | arm | intake | etc
   - submodel: shoulders.ldr
     count: 1
-    # port: 1-12  # VEX IQ port number
-    # purpose: drive | arm | intake | etc
-    port: null
+    port: null  # 1-12
+    purpose: null  # drive | arm | intake | etc
+
+# Wheel Assemblies
+# Each assembly groups parts (hub, tire, etc.) that spin together
+# Assemblies are referenced by ID in the drivetrain section
+wheel_assemblies:
+  left_front:
+    world_position: [58.0, -80.0, -96.0]
+    spin_axis: [0.000, -1.000, 0.000]
+    outer_diameter_mm: 44.0
+    wheel_type: hub  # tire | omni | mecanum | wheel
+    parts:
+      - part: 228-2500-208c02
+        type: hub
+        submodel: wheelsleft.ldr
+        local_position: [-86, -16, -112]
+  left_rear:
+    world_position: [58.0, -80.0, 160.0]
+    spin_axis: [0.000, -1.000, 0.000]
+    outer_diameter_mm: 44.0
+    wheel_type: hub  # tire | omni | mecanum | wheel
+    parts:
+      - part: 228-2500-208c02
+        type: hub
+        submodel: wheelsleft.ldr
+        local_position: [-86, -16, 144]
+  right_front:
+    world_position: [-58.0, -80.0, -96.0]
+    spin_axis: [0.000, 1.000, 0.000]
+    outer_diameter_mm: 44.0
+    wheel_type: hub  # tire | omni | mecanum | wheel
+    parts:
+      - part: 228-2500-208c02
+        type: hub
+        submodel: wheelsright.ldr
+        local_position: [86, -16, -112]
+  right_rear:
+    world_position: [-58.0, -80.0, 160.0]
+    spin_axis: [0.000, 1.000, 0.000]
+    outer_diameter_mm: 44.0
+    wheel_type: hub  # tire | omni | mecanum | wheel
+    parts:
+      - part: 228-2500-208c02
+        type: hub
+        submodel: wheelsright.ldr
+        local_position: [86, -16, 144]
+
+# Drivetrain Configuration
+# References wheel assemblies by ID
+drivetrain:
+  type: tank  # tank | mecanum | x_drive | h_drive
+  rotation_center: [0.0, -80.0, 32.0]
+  rotation_axis: [0, 1, 0]
+  track_width_mm: 116.0
+  wheel_diameter_mm: 44.0
+
+  left_wheels:
+    - left_front
+    - left_rear
+
+  right_wheels:
+    - right_front
+    - right_rear
 
 # Sensor Configuration
 sensors:
-  # No sensor parts detected
-
-# Code Bindings
-# Maps variable names from VEX Python code to robot submodels
-# This enables the simulator to animate the correct parts when code runs
-code_bindings:
-  # Example bindings (fill in based on your robot code):
-  # 
-  # Arm_180:                    # Variable name from code
-  #   type: motor_group         # motor | motor_group | pneumatic
-  #   ports: [2, 5]             # VEX IQ port numbers
-  #   submodel: Arm.ldr         # Which submodel to animate
-  #   children: [FingerA.ldr, FingerB.ldr]  # Child parts that move with it
-  # 
-  # A180_Claws:
-  #   type: pneumatic
-  #   port: 9
-  #   submodels: [FingerA.ldr, FingerB.ldr]  # Parts actuated by pneumatic
-  #   action: open_close        # open_close | extend_retract
-  # 
-  # left_drive_smart:
-  #   type: motor
-  #   port: 1
-  #   submodel: LeftSideDrive.ldr
-  #   role: left_drive
+  []  # No sensor parts detected

@@ -33,6 +33,7 @@ typedef struct {
     char left_drive[ROBOTDEF_MAX_NAME];
     char right_drive[ROBOTDEF_MAX_NAME];
     float rotation_center[3];  // LDU coordinates
+    float rotation_axis[3];    // Axis for robot rotation (default: [0,1,0] = vertical)
     float track_width;         // LDU
     float wheel_diameter;      // mm (0 if not specified)
 } RobotDefDrivetrain;
