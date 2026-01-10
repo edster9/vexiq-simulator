@@ -1,11 +1,8 @@
 # Robot Definition File
 # Generated from: ClawbotIQ.mpd
 # 
-# This file describes the robot's structure and can be extended with:
-#   - rotation_axis: Define pivot points for articulated parts
-#   - rotation_limits: min/max angles for joints
-#   - wheel_config: drivetrain setup (left/right, diameter, etc.)
-#   - sensor_ports: Map sensors to VEX IQ ports
+# This file describes the robot's structure for simulation.
+# Extend with kinematics, port mappings, and code bindings.
 
 version: 1
 source_file: ClawbotIQ.mpd
@@ -14,10 +11,12 @@ main_model: ClawbotIQ.ldr
 # Summary
 summary:
   total_submodels: 16
-  total_wheels: 8
-  total_motors: 4
-  total_sensors: 4
   has_brain: true
+  total_motors: 4
+  total_sensors: 5
+  total_wheels: 8
+  total_gears: 12
+  total_brains: 1
 
 # Submodel Hierarchy
 hierarchy:
@@ -34,324 +33,305 @@ hierarchy:
       - RearRack.ldr
       - Arm.ldr
       - TouchLED.ldr
-    contains: [1 sensors]
+    contains: [1 sensor, 2 gears]
 
 # Detailed Submodel Definitions
-# Add rotation_axis, rotation_limits, etc. to articulated parts
 submodels:
   ClawbotIQ.ldr:
     position: [0, 0, 0]
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-3011
-        type: sensor:bumper_switch
+        category: sensor
+        type: sensor:distance_sensor_/_bumper_switch
+        name: "Distance Sensor / Bumper Switch"
         position: [80.0, -64.0, 560.0]
 
   LeftSideDrive.ldr:
     position: [-48.0, 0.0, 448.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2560
+        category: motor
         type: motor:smart_motor
+        name: "Smart Motor"
         position: [0.0, 0.0, 0.0]
       - part: 228-2500-208
-        type: wheel:wheel_hub_44mm
+        category: wheel
+        type: wheel:hub
+        name: "Small Wheel Hub (44 mm)"
         position: [0.0, 0.0, -113.0]
       - part: 228-2500-209
-        type: wheel:tire_44mm
+        category: wheel
+        type: wheel:tire
+        name: "Tire (200 mm Travel)"
         position: [0.0, 0.0, -113.0]
       - part: 228-2500-208
-        type: wheel:wheel_hub_44mm
+        category: wheel
+        type: wheel:hub
+        name: "Small Wheel Hub (44 mm)"
         position: [192.0, 0.0, -113.0]
       - part: 228-2500-209
-        type: wheel:tire_44mm
+        category: wheel
+        type: wheel:tire
+        name: "Tire (200 mm Travel)"
         position: [192.0, 0.0, -113.0]
 
   RightSideDrive.ldr:
     position: [208.0, 0.0, 448.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2560
+        category: motor
         type: motor:smart_motor
+        name: "Smart Motor"
         position: [0.0, 0.0, 0.0]
       - part: 228-2500-208
-        type: wheel:wheel_hub_44mm
+        category: wheel
+        type: wheel:hub
+        name: "Small Wheel Hub (44 mm)"
         position: [0.0, 0.0, -113.0]
       - part: 228-2500-209
-        type: wheel:tire_44mm
+        category: wheel
+        type: wheel:tire
+        name: "Tire (200 mm Travel)"
         position: [0.0, 0.0, -113.0]
       - part: 228-2500-208
-        type: wheel:wheel_hub_44mm
+        category: wheel
+        type: wheel:hub
+        name: "Small Wheel Hub (44 mm)"
         position: [-192.0, 0.0, -113.0]
       - part: 228-2500-209
-        type: wheel:tire_44mm
+        category: wheel
+        type: wheel:tire
+        name: "Tire (200 mm Travel)"
         position: [-192.0, 0.0, -113.0]
 
   FrontStrut.ldr:
     position: [0.0, -48.0, 336.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   RearStrut.ldr:
     position: [80.0, 0.0, 560.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2540c02
-        type: brain:robot_brain_with_battery
+        category: brain
+        type: brain:brain_with_battery
+        name: "Robot Brain with Battery"
         position: [0.0, -112.0, 112.0]
 
   ShoulderMountA.ldr:
     position: [-48.0, -160.0, 224.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2560
+        category: motor
         type: motor:smart_motor
+        name: "Smart Motor"
         position: [-16.0, -48.0, 0.0]
 
   ShoulderMountB.ldr:
     position: [192.0, -160.0, 224.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   FrontBumper.ldr:
     position: [80.0, 0.0, 176.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
+    special_parts:
+      - part: 228-2677
+        category: sensor
+        type: sensor:bumper_switch_gen_1
+        name: "Bumper Switch (Gen 1)"
+        position: [0.0, 0.0, 0.0]
 
   RearShoulderStrut.ldr:
     position: [64.0, -192.0, 288.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   RearRack.ldr:
     position: [32.0, -265.332, 376.058]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   Arm.ldr:
     position: [80.0, -29.05, 18.242]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-2560
+        category: motor
         type: motor:smart_motor
+        name: "Smart Motor"
         position: [48.0, -64.0, -48.0]
 
   FingerA.ldr:
     position: [135.337, 0.0, -28.715]
     parent: Arm.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   FingerB.ldr:
     position: [-137.039, 0.0, -37.276]
     parent: Arm.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
 
   TouchLED.ldr:
     position: [208.0, -160.0, 224.0]
     parent: ClawbotIQ.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-3010
+        category: sensor
         type: sensor:touch_led
+        name: "Touch LED"
         position: [0.0, 0.0, -32.0]
 
   ColorSensor.ldr:
     position: [124.71, -32.0, -59.46]
     parent: Arm.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-3012
+        category: sensor
         type: sensor:color_sensor
+        name: "Color Sensor"
         position: [-16.0, 16.0, -32.0]
 
   GyroSensor.ldr:
     position: [80.0, 32.0, -32.0]
     parent: FrontStrut.ldr
-    # Kinematics (fill in for articulated parts):
-    # rotation_axis: [x, y, z]  # Local axis of rotation
-    # rotation_origin: [x, y, z]  # Pivot point in local coords
-    # rotation_limits: [min_deg, max_deg]
-    kinematics: null
+    kinematics: null  # rotation_axis, rotation_origin, rotation_limits
     special_parts:
       - part: 228-3014
+        category: sensor
         type: sensor:gyro_sensor
+        name: "Gyro Sensor"
         position: [0.0, -16.0, -16.0]
-
-# Drivetrain Configuration
-# Defines the robot's rotation center and drive geometry
-drivetrain:
-  type: tank  # tank (skid-steer) | mecanum | omni | ackermann
-  left_drive: LeftSideDrive.ldr
-  right_drive: RightSideDrive.ldr
-  # Rotation center (midpoint between drive assemblies)
-  # Detected via naming pattern
-  rotation_center: [80.0, 0.0, 448.0]
-  track_width: 256.0  # Distance between left and right wheels (LDU)
-  # wheel_diameter: 44  # mm - set based on wheel type used
-
-# Wheel Configuration
-# Identify which submodels contain drive wheels
-wheels:
-  - submodel: LeftSideDrive.ldr
-    count: 4
-    # Configure drivetrain role:
-    # role: left_drive | right_drive | caster | manipulator
-    # diameter_mm: 44  # or 60, 200
-    role: null
-  - submodel: RightSideDrive.ldr
-    count: 4
-    # Configure drivetrain role:
-    # role: left_drive | right_drive | caster | manipulator
-    # diameter_mm: 44  # or 60, 200
-    role: null
 
 # Motor Configuration
 motors:
   - submodel: LeftSideDrive.ldr
     count: 1
-    # port: 1-12  # VEX IQ port number
-    # purpose: drive | arm | intake | etc
-    port: null
+    port: null  # 1-12
+    purpose: null  # drive | arm | intake | etc
   - submodel: RightSideDrive.ldr
     count: 1
-    # port: 1-12  # VEX IQ port number
-    # purpose: drive | arm | intake | etc
-    port: null
+    port: null  # 1-12
+    purpose: null  # drive | arm | intake | etc
   - submodel: ShoulderMountA.ldr
     count: 1
-    # port: 1-12  # VEX IQ port number
-    # purpose: drive | arm | intake | etc
-    port: null
+    port: null  # 1-12
+    purpose: null  # drive | arm | intake | etc
   - submodel: Arm.ldr
     count: 1
-    # port: 1-12  # VEX IQ port number
-    # purpose: drive | arm | intake | etc
-    port: null
+    port: null  # 1-12
+    purpose: null  # drive | arm | intake | etc
+
+# Wheel Assemblies
+# Each assembly groups parts (hub, tire, etc.) that spin together
+# Assemblies are referenced by ID in the drivetrain section
+wheel_assemblies:
+  left_front:
+    world_position: [-48.0, 0.0, 335.0]
+    spin_axis: [1.000, 0.000, 0.000]
+    outer_diameter_mm: 63.7
+    wheel_type: tire  # tire | omni | mecanum | wheel
+    parts:
+      - part: 228-2500-208
+        type: hub
+        submodel: LeftSideDrive.ldr
+        local_position: [0, 0, -113]
+      - part: 228-2500-209
+        type: tire
+        submodel: LeftSideDrive.ldr
+        local_position: [0, 0, -113]
+  left_rear:
+    world_position: [144.0, 0.0, 335.0]
+    spin_axis: [1.000, 0.000, 0.000]
+    outer_diameter_mm: 63.7
+    wheel_type: tire  # tire | omni | mecanum | wheel
+    parts:
+      - part: 228-2500-208
+        type: hub
+        submodel: LeftSideDrive.ldr
+        local_position: [192, 0, -113]
+      - part: 228-2500-209
+        type: tire
+        submodel: LeftSideDrive.ldr
+        local_position: [192, 0, -113]
+  right_front:
+    world_position: [208.0, 0.0, 335.0]
+    spin_axis: [-1.000, 0.000, 0.000]
+    outer_diameter_mm: 63.7
+    wheel_type: tire  # tire | omni | mecanum | wheel
+    parts:
+      - part: 228-2500-208
+        type: hub
+        submodel: RightSideDrive.ldr
+        local_position: [0, 0, -113]
+      - part: 228-2500-209
+        type: tire
+        submodel: RightSideDrive.ldr
+        local_position: [0, 0, -113]
+  right_rear:
+    world_position: [16.0, 0.0, 335.0]
+    spin_axis: [-1.000, 0.000, 0.000]
+    outer_diameter_mm: 63.7
+    wheel_type: tire  # tire | omni | mecanum | wheel
+    parts:
+      - part: 228-2500-208
+        type: hub
+        submodel: RightSideDrive.ldr
+        local_position: [-192, 0, -113]
+      - part: 228-2500-209
+        type: tire
+        submodel: RightSideDrive.ldr
+        local_position: [-192, 0, -113]
+
+# Drivetrain Configuration
+# References wheel assemblies by ID
+drivetrain:
+  type: tank  # tank | mecanum | x_drive | h_drive
+  rotation_center: [80.0, 0.0, 335.0]
+  rotation_axis: [0, 1, 0]
+  track_width_mm: 64.0
+  wheel_diameter_mm: 63.7
+
+  left_wheels:
+    - left_front
+    - left_rear
+
+  right_wheels:
+    - right_front
+    - right_rear
 
 # Sensor Configuration
 sensors:
-  - type: bumper_switch
+  - type: sensor:distance_sensor_/_bumper_switch
     submodel: ClawbotIQ.ldr
     part: 228-3011
-    # port: 1-12  # VEX IQ port number
-    port: null
-  - type: touch_led
+    port: null  # 1-12
+  - type: sensor:bumper_switch_gen_1
+    submodel: FrontBumper.ldr
+    part: 228-2677
+    port: null  # 1-12
+  - type: sensor:touch_led
     submodel: TouchLED.ldr
     part: 228-3010
-    # port: 1-12  # VEX IQ port number
-    port: null
-  - type: color_sensor
+    port: null  # 1-12
+  - type: sensor:color_sensor
     submodel: ColorSensor.ldr
     part: 228-3012
-    # port: 1-12  # VEX IQ port number
-    port: null
-  - type: gyro_sensor
+    port: null  # 1-12
+  - type: sensor:gyro_sensor
     submodel: GyroSensor.ldr
     part: 228-3014
-    # port: 1-12  # VEX IQ port number
-    port: null
-
-# Code Bindings
-# Maps variable names from VEX Python code to robot submodels
-# This enables the simulator to animate the correct parts when code runs
-code_bindings:
-  # Example bindings (fill in based on your robot code):
-  # 
-  # Arm_180:                    # Variable name from code
-  #   type: motor_group         # motor | motor_group | pneumatic
-  #   ports: [2, 5]             # VEX IQ port numbers
-  #   submodel: Arm.ldr         # Which submodel to animate
-  #   children: [FingerA.ldr, FingerB.ldr]  # Child parts that move with it
-  # 
-  # A180_Claws:
-  #   type: pneumatic
-  #   port: 9
-  #   submodels: [FingerA.ldr, FingerB.ldr]  # Parts actuated by pneumatic
-  #   action: open_close        # open_close | extend_retract
-  # 
-  # left_drive_smart:
-  #   type: motor
-  #   port: 1
-  #   submodel: LeftSideDrive.ldr
-  #   role: left_drive
-  
-  # Auto-detected candidates (uncomment and configure):
-  # Arm:
-  #   type: motor_group
-  #   ports: []  # Fill in port numbers
-  #   submodel: Arm.ldr
-  # LeftSideDrive:
-  #   type: motor
-  #   port: null  # Fill in port number
-  #   submodel: LeftSideDrive.ldr
-  #   role: left_drive
-  # RightSideDrive:
-  #   type: motor
-  #   port: null  # Fill in port number
-  #   submodel: RightSideDrive.ldr
-  #   role: right_drive
+    port: null  # 1-12

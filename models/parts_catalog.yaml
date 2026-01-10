@@ -1,0 +1,1173 @@
+# VEX IQ Parts Catalog
+# Auto-generated from official VEX STEP files
+# Source: VEX-IQ-All-Parts-2024-11-08.zip
+# Total parts: 475
+#
+# Categories:
+#   battery: 1 parts
+#   beam: 79 parts
+#   bearing: 6 parts
+#   belt: 5 parts
+#   brain: 2 parts
+#   cable: 1 parts
+#   chain: 2 parts
+#   connector: 40 parts
+#   controller: 1 parts
+#   decorative: 22 parts
+#   gear: 34 parts
+#   hardware: 1 parts
+#   linear_motion: 3 parts
+#   lock: 2 parts
+#   manipulator: 5 parts
+#   mechanism: 2 parts
+#   motor: 1 parts
+#   other: 46 parts
+#   pin: 17 parts
+#   plate: 85 parts
+#   pulley: 5 parts
+#   radio: 1 parts
+#   rubber_band: 5 parts
+#   sensor: 5 parts
+#   shaft: 50 parts
+#   spacer: 1 parts
+#   spool: 2 parts
+#   sprocket: 5 parts
+#   standoff: 14 parts
+#   suspension: 2 parts
+#   turntable: 4 parts
+#   wheel: 26 parts
+
+version: 1
+
+# Wheel assemblies (hub + tire pairs that rotate together)
+# VEX tires use 'Travel' = circumference, so outer_diameter = travel / pi
+wheel_assemblies:
+  44mm_hub:
+    hub: "228-2500-208"
+    tire: "228-2500-209"
+    hub_diameter_mm: 44
+    outer_diameter_mm: 63.7
+    travel_mm: 200
+  64mm_hub:
+    hub: "228-2500-211"
+    tire: "228-2500-212"
+    hub_diameter_mm: 64
+    outer_diameter_mm: 79.6
+    travel_mm: 250
+  44mm_hub_small_tire:
+    hub: "228-2500-208"
+    tire: "228-2500-207"
+    hub_diameter_mm: 44
+    outer_diameter_mm: 31.8
+    travel_mm: 100
+  64mm_hub_medium_tire:
+    hub: "228-2500-211"
+    tire: "228-2500-210"
+    hub_diameter_mm: 64
+    outer_diameter_mm: 50.9
+    travel_mm: 160
+  32mm_hub:
+    hub: "228-2500-1950"
+    tire: null  # Multiple tire options available
+    hub_diameter_mm: 32.2
+  48mm_hub:
+    hub: "228-2500-1953"
+    tire: null  # Multiple tire options available
+    hub_diameter_mm: 48.5
+
+# Parts by category
+parts:
+
+  # WHEEL (26 parts)
+  wheel:
+    "228-2500-1208":
+      name: "Small Wheel Hub (44 mm)"
+      diameter_mm: 44.0
+      wheel_type: "hub"
+    "228-2500-1211":
+      name: "Large Wheel Hub (64 mm)"
+      diameter_mm: 64.0
+      wheel_type: "hub"
+    "228-2500-1383":
+      name: "4x Pitch Diameter (160mm Travel) Smooth Wheel"
+      diameter_mm: 50.8
+      wheel_type: "wheel"
+    "228-2500-1384":
+      name: "4x Pitch Diameter (160 mm Travel) Low-Friction Wheel"
+      diameter_mm: 50.8
+      wheel_type: "wheel"
+    "228-2500-1402":
+      name: "6x Pitch Flywheel (75 g)"
+      wheel_type: "wheel"
+    "228-2500-1916":
+      name: "0.75x Wide, 1.5x Pitch Diameter Rover Wheel"
+      diameter_mm: 19.049999999999997
+      wheel_type: "wheel"
+    "228-2500-1917":
+      name: "1.5x Wide, 2.5x Pitch Diameter Rover Wheel"
+      diameter_mm: 31.75
+      wheel_type: "wheel"
+    "228-2500-1926":
+      name: "2x Wide, 2x Pitch Diameter Rover Wheel"
+      diameter_mm: 25.4
+      wheel_type: "wheel"
+    "228-2500-1951":
+      name: "2x Wide, 3x Pitch Diameter Tire (Straight Offroad Tread)"
+      diameter_mm: 38.099999999999994
+      wheel_type: "tire"
+    "228-2500-1952":
+      name: "2x Wide, 3.5x Pitch Diameter Balloon Tire (Chevron Offroad Tread)"
+      diameter_mm: 44.449999999999996
+      wheel_type: "tire"
+    "228-2500-1954":
+      name: "2x Wide, 7x Pitch Diameter Balloon Tire (Racing Slick Tread)"
+      diameter_mm: 88.89999999999999
+      wheel_type: "tire"
+    "228-2500-1955":
+      name: "2x Wide, 7x Pitch Diameter Balloon Tire (Offroad Hex Tread)"
+      diameter_mm: 88.89999999999999
+      wheel_type: "tire"
+    "228-2500-1956":
+      name: "2x Wide, 5.5x Pitch Diameter Balloon Tire (Trapezoid Offroad Tread)"
+      diameter_mm: 69.85
+      wheel_type: "tire"
+    "228-2500-1957":
+      name: "2x Wide, 3.5x Pitch Diameter Balloon Tire (Trapezoid Offroad Tread)"
+      diameter_mm: 44.449999999999996
+      wheel_type: "tire"
+    "228-2500-1958":
+      name: "2x Wide, 5x Pitch Diameter Balloon Tire (Racing Slick Tread)"
+      diameter_mm: 63.5
+      wheel_type: "tire"
+    "228-2500-207":
+      name: "Tire (100 mm Travel)"
+      diameter_mm: 100.0
+      wheel_type: "tire"
+    "228-2500-208":
+      name: "Small Wheel Hub (44 mm)"
+      diameter_mm: 44.0
+      wheel_type: "hub"
+    "228-2500-209":
+      name: "Tire (200 mm Travel)"
+      diameter_mm: 200.0
+      wheel_type: "tire"
+    "228-2500-210":
+      name: "Tire (160 mm Travel)"
+      diameter_mm: 160.0
+      wheel_type: "tire"
+    "228-2500-211":
+      name: "Large Wheel Hub (64 mm)"
+      diameter_mm: 64.0
+      wheel_type: "hub"
+    "228-2500-212":
+      name: "Tire (250 mm Travel)"
+      diameter_mm: 250.0
+      wheel_type: "tire"
+    "228-2500-239":
+      name: "Traction Link"
+      wheel_type: "tire"
+    "228-2500-297":
+      name: "Hexcalator Wheel"
+      wheel_type: "wheel"
+    "228-2500-318":
+      name: "Ant Wheel - 96mm"
+      diameter_mm: 96.0
+      wheel_type: "wheel"
+    "228-2500-319":
+      name: "Ant Wheel - 86mm"
+      diameter_mm: 86.0
+      wheel_type: "wheel"
+    "228-2500-368":
+      name: "2x Wide, 60 Degree Omni 1x2 Corner Connector"
+      wheel_type: "omni"
+
+  # MOTOR (1 parts)
+  motor:
+    "228-2560":
+      name: "Smart Motor"
+
+  # SENSOR (5 parts)
+  sensor:
+    "228-2677":
+      name: "Bumper Switch (Gen 1)"
+    "228-3010":
+      name: "Touch LED"
+    "228-3011":
+      name: "Distance Sensor / Bumper Switch"
+    "228-3012":
+      name: "Color Sensor"
+    "228-3014":
+      name: "Gyro Sensor"
+
+  # BRAIN (2 parts)
+  brain:
+    "228-2540":
+      name: "Robot Brain"
+    "228-2540c02":
+      name: "Robot Brain with Battery"
+
+  # CONTROLLER (1 parts)
+  controller:
+    "228-2530":
+      name: "Controller"
+
+  # GEAR (34 parts)
+  gear:
+    "228-2500-1454":
+      name: "1x20 Linear Motion Rack Gear"
+    "228-2500-1472":
+      name: "1x6 Linear Motion Rack Gear"
+    "228-2500-1473":
+      name: "1x6 Continuous Linear Motion Rack Gear"
+    "228-2500-1924":
+      name: "2x1x1 Landing Gear Beam"
+    "228-2500-2004":
+      name: "2x7 Landing Gear Panel"
+    "228-2500-202":
+      name: "XL Turntable 36 Tooth Ring Gear Bushing"
+    "228-2500-213":
+      name: "12 Tooth Gear"
+    "228-2500-214":
+      name: "36 Tooth Gear"
+    "228-2500-215":
+      name: "60 Tooth Gear"
+    "228-2500-216":
+      name: "Rack Gear"
+    "228-2500-218":
+      name: "36 Tooth Crown Gear"
+    "228-2500-2180":
+      name: "8 Tooth High Strength Hybrid Gear"
+    "228-2500-2181":
+      name: "16 Tooth High Strength Hybrid Gear"
+    "228-2500-2182":
+      name: "24 Tooth High Strength Hybrid Gear"
+    "228-2500-219":
+      name: "Worm Gear"
+    "228-2500-2191":
+      name: "24 Tooth High Strength Dog Gear"
+    "228-2500-227":
+      name: "24 Tooth Gear"
+    "228-2500-228":
+      name: "48 Tooth Gear"
+    "228-2500-229":
+      name: "Spider 48 Tooth Ring Gear"
+    "228-2500-243":
+      name: "Scarab Thrust Washer for 60 Tooth Gear"
+    "228-2500-244":
+      name: "18 Tooth Bevel Gear"
+    "228-2500-245":
+      name: "Differential Gear"
+    "228-2500-246":
+      name: "1x4 Crank Arm with 23 Tooth Gear"
+    "228-2500-247":
+      name: "60 Tooth Internal Ring Gear"
+    "228-2500-250":
+      name: "12 Tooth Hybrid Gear"
+    "228-2500-251":
+      name: "24 Tooth Hybrid Gear"
+    "228-2500-252":
+      name: "36 Tooth Hybrid Gear"
+    "228-2500-253":
+      name: "48 Tooth Hybrid Gear"
+    "228-2500-254":
+      name: "60 Tooth Hybrid Gear"
+    "228-2500-347":
+      name: "Differential Gear (High Strength)"
+    "228-2500-451":
+      name: "36 Tooth Idler Gear"
+    "228-2500-461":
+      name: "15 Tooth Gear (34DP)"
+    "228-2500-462":
+      name: "36 Tooth Gear (34DP)"
+    "228-2500-463":
+      name: "12 Tooth High Strength Bevel Gear"
+
+  # SPROCKET (5 parts)
+  sprocket:
+    "228-2500-232":
+      name: "8 Tooth Sprocket"
+    "228-2500-233":
+      name: "16 Tooth Sprocket"
+    "228-2500-235":
+      name: "24 Tooth Sprocket"
+    "228-2500-236":
+      name: "32 Tooth Sprocket"
+    "228-2500-237":
+      name: "40 Tooth Sprocket"
+
+  # CHAIN (2 parts)
+  chain:
+    "228-2500-230":
+      name: "Chain Link"
+    "228-2500-231":
+      name: "Tank Tread, Attachment Link"
+
+  # PULLEY (5 parts)
+  pulley:
+    "228-2500-1413":
+      name: ".5x Pitch Idler Pulley"
+    "228-2500-163":
+      name: "10mm Pulley"
+    "228-2500-164":
+      name: "20mm Pulley"
+    "228-2500-165":
+      name: "30mm Pulley"
+    "228-2500-166":
+      name: "40mm Pulley"
+
+  # BELT (5 parts)
+  belt:
+    "228-2500-1225":
+      name: "2x30 mm Square Silicone Belt"
+    "228-2500-221":
+      name: "2x30mm Rubber Belt"
+    "228-2500-222":
+      name: "2x40mm Rubber Belt"
+    "228-2500-223":
+      name: "2x50mm Rubber Belt"
+    "228-2500-224":
+      name: "2x60mm Rubber Belt"
+
+  # BEAM (79 parts)
+  beam:
+    "228-2500-001":
+      name: "1x2 Beam"
+    "228-2500-002":
+      name: "1x3 Beam"
+    "228-2500-003":
+      name: "1x4 Beam"
+    "228-2500-004":
+      name: "1x5 Beam"
+    "228-2500-005":
+      name: "1x6 Beam"
+    "228-2500-006":
+      name: "1x7 Beam"
+    "228-2500-007":
+      name: "1x8 Beam"
+    "228-2500-008":
+      name: "1x9 Beam"
+    "228-2500-009":
+      name: "1x10 Beam"
+    "228-2500-010":
+      name: "1x11 Beam"
+    "228-2500-011":
+      name: "1x12 Beam"
+    "228-2500-012":
+      name: "1x13 Beam"
+    "228-2500-013":
+      name: "1x14 Beam"
+    "228-2500-014":
+      name: "1x16 Beam"
+    "228-2500-015":
+      name: "1x18 Beam"
+    "228-2500-016":
+      name: "1x20 Beam"
+    "228-2500-017":
+      name: "2x2 Beam"
+    "228-2500-018":
+      name: "2x3 Beam"
+    "228-2500-019":
+      name: "2x4 Beam"
+    "228-2500-020":
+      name: "2x5 Beam"
+    "228-2500-021":
+      name: "2x6 Beam"
+    "228-2500-022":
+      name: "2x7 Beam"
+    "228-2500-023":
+      name: "2x8 Beam"
+    "228-2500-024":
+      name: "2x9 Beam"
+    "228-2500-025":
+      name: "2x10 Beam"
+    "228-2500-026":
+      name: "2x12 Beam"
+    "228-2500-027":
+      name: "2x14 Beam"
+    "228-2500-028":
+      name: "2x16 Beam"
+    "228-2500-029":
+      name: "2x18 Beam"
+    "228-2500-030":
+      name: "2x20 Beam"
+    "228-2500-1110":
+      name: "1x6 (3-4-5 Triangle) Diagonal Offset Truss Beam"
+    "228-2500-1140":
+      name: "2x2 Center Lock Beam"
+    "228-2500-1141":
+      name: "1x3 Center Lock Beam"
+    "228-2500-1159":
+      name: "3x3 Wye Lock Beam"
+    "228-2500-1189":
+      name: "2x3 Delta Tee Beam"
+    "228-2500-1199":
+      name: "2x4x2 Double 60 Degree Beam"
+    "228-2500-1240":
+      name: "2x4 Wedge Beam"
+    "228-2500-1268":
+      name: "2x Wide, 3x3 60 Degree Angle Beam"
+    "228-2500-140":
+      name: "2x2 Center Lock Beam"
+    "228-2500-141":
+      name: "1x3 Center Lock Beam"
+    "228-2500-144":
+      name: "3x4 Tee Beam"
+    "228-2500-145":
+      name: "2x3 Right Angle Beam"
+    "228-2500-1456":
+      name: "1x5 Linear Motion Beam"
+    "228-2500-146":
+      name: "3x3 Right Angle Beam"
+    "228-2500-147":
+      name: "3x3 30 Degree Angle Beam"
+    "228-2500-148":
+      name: "3x3 45 Degree Angle Beam"
+    "228-2500-1485":
+      name: "2x2 30 Degree Beam"
+    "228-2500-1486":
+      name: "2x2 45 Degree Beam"
+    "228-2500-149":
+      name: "3x3 60 Degreee Angle Beam"
+    "228-2500-150":
+      name: "3x5 Right Angle Beam"
+    "228-2500-151":
+      name: "4x4 Offset Right Angle Beam"
+    "228-2500-152":
+      name: "5x6.5 Tee Beam"
+    "228-2500-153":
+      name: "1x7 Spider Fork Beam"
+    "228-2500-154":
+      name: "1x1 Beam"
+    "228-2500-1548":
+      name: "1x4 Low Profile End Lock Beam"
+    "228-2500-1556":
+      name: "2x6x2 30 Degree Jogged Beam"
+    "228-2500-156":
+      name: "3x3 Plus Gusset Beam"
+    "228-2500-1601":
+      name: "5x2x2 Tee Beam"
+    "228-2500-161":
+      name: "3x3 Wye Lock Beam"
+    "228-2500-1689":
+      name: "1x4 Single-Ended Ball Socket Beam"
+    "228-2500-1925":
+      name: "2x2 Center Offset Round Lock Beam"
+    "228-2500-2001":
+      name: "4x7x4 Offset Channel Beam"
+    "228-2500-206":
+      name: "2x11 Beam"
+    "228-2500-298":
+      name: "Fork Lift Beam"
+    "228-2500-322":
+      name: "2x6 Beam with Chamferred Ends"
+    "228-2500-323":
+      name: "1x6 Smooth Beam"
+    "228-2500-391":
+      name: "1x1 Left Corner Beam"
+    "228-2500-392":
+      name: "1x1 Right Corner Beam"
+    "228-2500-400":
+      name: "2x1 Left Corner Beam"
+    "228-2500-401":
+      name: "2x1 Right Corner Beam"
+    "228-2500-406":
+      name: "2x2 Left Corner Beam"
+    "228-2500-407":
+      name: "2x2 Right Corner Beam"
+    "228-2500-408":
+      name: "2x1 Extended Left Corner Beam"
+    "228-2500-409":
+      name: "2x1 Extended Right Corner Beam"
+    "228-2500-412":
+      name: "2x2 Extended Left Corner Beam"
+    "228-2500-413":
+      name: "2x2 Extended Right Corner Beam"
+    "228-2500-471":
+      name: "17x Robot Arm Beam"
+    "228-2500-472":
+      name: "12x Robot Arm Beam"
+    "228-2500-478":
+      name: "6x2x2 Tee Beam"
+
+  # PLATE (85 parts)
+  plate:
+    "228-2500-031":
+      name: "3x3 Plate"
+    "228-2500-032":
+      name: "3x4 Plate"
+    "228-2500-034":
+      name: "3x6 Plate"
+    "228-2500-035":
+      name: "3x8 Plate"
+    "228-2500-036":
+      name: "3x10 Plate"
+    "228-2500-037":
+      name: "3x12 Plate"
+    "228-2500-038":
+      name: "3x16 Plate"
+    "228-2500-040":
+      name: "4x4 Plate"
+    "228-2500-042":
+      name: "4x6 Plate"
+    "228-2500-043":
+      name: "4x8 Plate"
+    "228-2500-044":
+      name: "4x10 Plate"
+    "228-2500-045":
+      name: "4x12 Plate"
+    "228-2500-046":
+      name: "4x16 Plate"
+    "228-2500-051":
+      name: "6x12 Plate"
+    "228-2500-059":
+      name: "12x12 Plate"
+    "228-2500-1117":
+      name: "7x9x11 (6-8-10 Triangle) Truss Plate"
+    "228-2500-1245":
+      name: "3x5 Wedge Plate"
+    "228-2500-1270":
+      name: "4x4 25mm Tube Plus Plate"
+    "228-2500-1357":
+      name: "3x4 1x Offset Trapezoid Plate"
+    "228-2500-1381":
+      name: "14x14 Octagon Truss Plate"
+    "228-2500-1436":
+      name: "2x6 Handle Plate"
+    "228-2500-1445":
+      name: "2x8 Medium Convex Plate"
+    "228-2500-1600":
+      name: "3x12 Girder Plate; 2x8 2x Offset Trapezoid"
+    "228-2500-1698":
+      name: "5x Pitch Diameter, 10x Pitch Long Half Round Panel"
+    "228-2500-1702":
+      name: "2x2, Extended 0.5 x 1x Pitch Sloped Panel"
+    "228-2500-1704":
+      name: "2x4, Extended 0.5 x 1x Pitch Sloped Panel"
+    "228-2500-1705":
+      name: "2x5, Extended 0.5 x 1x Pitch Sloped Panel"
+    "228-2500-1727":
+      name: "1x3, Extended 0.5 x 1x Pitch, Diagonal Left Corner Sloped Panel"
+    "228-2500-1728":
+      name: "1x3, Extended 0.5 x 1x Pitch, Diagonal Right Corner Sloped Panel"
+    "228-2500-1828":
+      name: "4x6, Dual 0.5 x 2x Pitch Double Sloped Panel"
+    "228-2500-1848":
+      name: "4x2, Dual 0.5 x 2x Pitch Fade Double Sloped Panel"
+    "228-2500-1849":
+      name: "4x5, Dual 0.5 x 2x Pitch Extended Fade Sloped Panel"
+    "228-2500-198":
+      name: "XL Turntable Spider Top Plate"
+    "228-2500-2000":
+      name: "6x6 Hexagon Plate"
+    "228-2500-2003":
+      name: "4.5x4.5 Diagonal Corner Panel"
+    "228-2500-2006":
+      name: "2x5 Eagle Head Panel"
+    "228-2500-2007":
+      name: "2x4.75 Curved Fade Panel"
+    "228-2500-2008":
+      name: "3x5.5 Front Shuttle Panel"
+    "228-2500-2009":
+      name: "3x5 Dual Curved Fade Panel"
+    "228-2500-2010":
+      name: "9x4.5 Solar Flat Panel"
+    "228-2500-2013":
+      name: "Left Shuttle Panel"
+    "228-2500-2014":
+      name: "2x3 Irregular Hexagon Flat Panel"
+    "228-2500-2015":
+      name: "3x3.5 Irregular Hexagon Flat Panel"
+    "228-2500-2016":
+      name: "3x4 End Flat Panel"
+    "228-2500-2017":
+      name: "2.5x5 Asymmetric End Flat Panel"
+    "228-2500-2018":
+      name: "4x7 Landing Skid Plate"
+    "228-2500-2020":
+      name: "1x3 Bottom Shuttle Nose Panel"
+    "228-2500-2021":
+      name: "Large Vehicle Cab Left Panel"
+    "228-2500-2022":
+      name: "Large Vehicle Cab Right Panel"
+    "228-2500-203":
+      name: "6x10 Bone Plate"
+    "228-2500-205":
+      name: "12x12 Truss Plate"
+    "228-2500-2100":
+      name: "3x1, R5 x Flat Curve Panel"
+    "228-2500-2101":
+      name: "3x2, R5 x Flat Curve Panel"
+    "228-2500-2108":
+      name: "4x1, R6 x Flat Curve Panel"
+    "228-2500-2109":
+      name: "4x2, R6 x Flat Curve Panel"
+    "228-2500-2116":
+      name: "3x3, R5 x R5 Curve Panel"
+    "228-2500-2120":
+      name: "Dual R5, Left Curve Filler Panel"
+    "228-2500-2121":
+      name: "Dual R5, Right Curve Filler Panel"
+    "228-2500-2124":
+      name: "3x4, R5 x Flat Left Concave Curve Panel"
+    "228-2500-2125":
+      name: "3x4, R5 x Flat Right Concave Curve Panel"
+    "228-2500-2134":
+      name: "3x4x3, R5 x R6 x Flat R5 Left Curve Panel"
+    "228-2500-2135":
+      name: "3x4x3, R5 x R6 x Flat R5 Right Curve Panel"
+    "228-2500-2161":
+      name: "4x4, Dual R6 Quarter Round Panel"
+    "228-2500-285":
+      name: "160mm Fender Panel Left"
+    "228-2500-286":
+      name: "160mm Fender Panel Right"
+    "228-2500-287":
+      name: "Racer Nose Panel"
+    "228-2500-290":
+      name: "Blank Year Plate"
+    "228-2500-291":
+      name: "Blank Award, VIQC Team Number Plate"
+    "228-2500-292":
+      name: "Blank VRC, VEXU Team Number Plate"
+    "228-2500-302":
+      name: "Strandbeast Face Plate"
+    "228-2500-304":
+      name: "3-Way 2x3 Plate"
+    "228-2500-305":
+      name: "3-Way Perpendicular 1x2 Plate"
+    "228-2500-307":
+      name: "Spider Face Plate"
+    "228-2500-308":
+      name: "Spider Top Plate - Front"
+    "228-2500-309":
+      name: "Spider Top Plate - Rear"
+    "228-2500-315":
+      name: "Ant Front Plate"
+    "228-2500-316":
+      name: "Ant Center Plate"
+    "228-2500-317":
+      name: "Ant Rear Plate"
+    "228-2500-507":
+      name: "2x4 25mm Ball Shooter Plate (Weak)"
+    "228-2500-509":
+      name: "2x4 25mm Ball Shooter Plate (Strong)"
+    "228-2500-510":
+      name: "1x1 Smooth Panel"
+    "228-2500-511":
+      name: "1x2 Smooth Panel"
+    "228-2500-513":
+      name: "1x4 Smooth Panel"
+    "228-2500-520":
+      name: "2x4 Smooth Panel"
+    "228-2500-524":
+      name: "2x8 Smooth Panel"
+
+  # CONNECTOR (40 parts)
+  connector:
+    "228-2500-1109":
+      name: "Truss Standoff Connector"
+    "228-2500-1250":
+      name: "Triple 1x Wide, 1x1 Corner Connector"
+    "228-2500-1251":
+      name: "Triple 1-2-1x Wide, 1x2 Corner Connector"
+    "228-2500-1253":
+      name: "Triple 2x Wide, 2x2 Corner Connector"
+    "228-2500-1254":
+      name: "1x2 Left Chassis Corner Connector"
+    "228-2500-1255":
+      name: "1x2 Right Chassis Corner Connector"
+    "228-2500-1258":
+      name: "Quad 2x Wide, 2x2 Corner Connector"
+    "228-2500-126":
+      name: "Large Chassis Corner Connector"
+    "228-2500-127":
+      name: "Small Chassis Corner Connector"
+    "228-2500-128":
+      name: "2x Wide, 1x2 Corner Connector"
+    "228-2500-129":
+      name: "1x Wide, 1x1 Corner Connector"
+    "228-2500-130":
+      name: "1x Wide, 1x1 Offset Corner Connector"
+    "228-2500-131":
+      name: "2x Wide, 2x1 Offset Corner Connector"
+    "228-2500-132":
+      name: "2x Wide, 2x1 Corner Connector"
+    "228-2500-133":
+      name: "2x Wide, 1x1 Offset Corner Connector"
+    "228-2500-134":
+      name: "2x Wide, 2x2 Corner Connector"
+    "228-2500-135":
+      name: "2x Wide, 1x2 Offset Corner Connector"
+    "228-2500-136":
+      name: "2x Wide, 2x2 Offset Corner Connector"
+    "228-2500-137":
+      name: "2x Wide, 2x3 Corner Connector"
+    "228-2500-170":
+      name: "Mini Standoff Connector"
+    "228-2500-171":
+      name: "Straight Standoff Connector"
+    "228-2500-172":
+      name: "End Standoff Connector"
+    "228-2500-175":
+      name: "45 Degree Standoff Connector"
+    "228-2500-178":
+      name: "90 Degree Standoff Connector"
+    "228-2500-192":
+      name: "15 Degree Offset Locking Angle End Standoff Connector"
+    "228-2500-2011":
+      name: "2x1x1.5 Offset Wing Connector"
+    "228-2500-220":
+      name: "Double 2x Wide, 2x2 Corner Connector"
+    "228-2500-2288":
+      name: "1x Wide, 1x1 Corner Connector (Weak)"
+    "228-2500-2295":
+      name: "2x Wide, 2x2 Corner Connector (Weak)"
+    "228-2500-2296":
+      name: "2x Wide, 2x2 Offset Corner Connector (Weak)"
+    "228-2500-259":
+      name: "Double 2x Wide, 0.5in Pipe Connector"
+    "228-2500-270":
+      name: "Double 1x Wide, 1x1 Corner Connector"
+    "228-2500-271":
+      name: "Double 2x Wide, 1x2 Corner Connector"
+    "228-2500-272":
+      name: "Double 1x Wide, 2x1 Corner Connector"
+    "228-2500-274":
+      name: "Double 2x Wide, 1x2 Offset Corner Connector"
+    "228-2500-277":
+      name: "Double 2x Wide, 2x2 Double Offset Corner Connector"
+    "228-2500-279":
+      name: "1x Wide, 1x2 Corner Connector"
+    "228-2500-283":
+      name: "2x Wide, 1x3 Offset Corner Connector"
+    "228-2500-371":
+      name: "2x Wide, 30 Degree Right 1x2 Corner Connector"
+    "228-2500-372":
+      name: "2x Wide, 30 Degree Left 1x2 Corner Connector"
+
+  # PIN (17 parts)
+  pin:
+    "228-2500-060":
+      name: "1x1 Connector Pin"
+    "228-2500-061":
+      name: "1x2 Connector Pin"
+    "228-2500-062":
+      name: "2x2 Connector Pin"
+    "228-2500-073":
+      name: "1x1 Idler Pin"
+    "228-2500-084":
+      name: "0x2 Idler Pin"
+    "228-2500-085":
+      name: "0x3 Smooth Idler Pin (Weak)"
+    "228-2500-086":
+      name: "0x2 Connector Pin"
+    "228-2500-087":
+      name: "0x3 Connector Pin"
+    "228-2500-089":
+      name: "3x3 Connector Pin"
+    "228-2500-090":
+      name: "0x2 Connector Pin with Spherical Cap"
+    "228-2500-093":
+      name: "2x3 Smooth Idler Pin"
+    "228-2500-097":
+      name: "0x3 Idler Pin"
+    "228-2500-098":
+      name: "1x2 Idler Pin"
+    "228-2500-099":
+      name: "0x1 Sheet Pin"
+    "228-2500-2258":
+      name: "0x2 Idler Pin (Weak)"
+    "228-2500-2260":
+      name: "1x1 Connector Pin (Weak)"
+    "228-2500-2261":
+      name: "1x2 Connector Pin (Weak)"
+
+  # SHAFT (50 parts)
+  shaft:
+    "228-2500-074":
+      name: "2x Pitch Plastic Shaft"
+    "228-2500-075":
+      name: "3x Pitch Plastic Shaft"
+    "228-2500-076":
+      name: "4x Pitch Plastic Shaft"
+    "228-2500-077":
+      name: "5x Pitch Plastic Shaft"
+    "228-2500-078":
+      name: "2x Pitch Plastic Motor Shaft"
+    "228-2500-079":
+      name: "4x Pitch Plastic Motor Shaft"
+    "228-2500-080":
+      name: "2x Pitch Capped Plastic Shaft"
+    "228-2500-081":
+      name: "3x Pitch Capped Plastic Shaft"
+    "228-2500-082":
+      name: "4x Pitch Capped Plastic Shaft"
+    "228-2500-083":
+      name: "5x Pitch Capped Plastic Shaft"
+    "228-2500-091":
+      name: "1.5x Pitch Plastic Motor Snap Shaft v1"
+    "228-2500-092":
+      name: "2x Pitch Plastic Motor Snap Shaft v1"
+    "228-2500-094":
+      name: "3x Pitch Plastic Motor Shaft"
+    "228-2500-117":
+      name: "2x Pitch Shaft"
+    "228-2500-119":
+      name: "3x Pitch Shaft"
+    "228-2500-120":
+      name: "4x Pitch Shaft"
+    "228-2500-121":
+      name: "5x Pitch Shaft"
+    "228-2500-122":
+      name: "6x Pitch Shaft"
+    "228-2500-123":
+      name: "7x Pitch Shaft"
+    "228-2500-124":
+      name: "8x Pitch Shaft"
+    "228-2500-125":
+      name: "Shaft Bushing"
+    "228-2500-143":
+      name: "Rubber Shaft Collar"
+    "228-2500-168":
+      name: "Rubber Shaft Collar v1"
+    "228-2500-2219":
+      name: "2x Pitch Capped Shaft"
+    "228-2500-2220":
+      name: "2.5x Pitch Capped Shaft"
+    "228-2500-2221":
+      name: "3x Pitch Capped Shaft"
+    "228-2500-2223":
+      name: "4x Pitch Capped Shaft"
+    "228-2500-2224":
+      name: "4.5x Pitch Capped Shaft"
+    "228-2500-2225":
+      name: "5x Pitch Capped Shaft"
+    "228-2500-2226":
+      name: "6x Pitch Capped Shaft"
+    "228-2500-2227":
+      name: "7x Pitch Capped Shaft"
+    "228-2500-2228":
+      name: "8x Pitch Capped Shaft"
+    "228-2500-2229":
+      name: "9x Pitch Capped Shaft"
+    "228-2500-2230":
+      name: "10x Pitch Capped Shaft"
+    "228-2500-2231":
+      name: "11x Pitch Capped Shaft"
+    "228-2500-2232":
+      name: "12x Pitch Capped Shaft"
+    "228-2500-2234":
+      name: "2x Pitch Motor Shaft"
+    "228-2500-2236":
+      name: "3x Pitch Motor Shaft"
+    "228-2500-2238":
+      name: "4x Pitch Motor Shaft"
+    "228-2500-260":
+      name: "9x Pitch Shaft"
+    "228-2500-261":
+      name: "10x Pitch Shaft"
+    "228-2500-262":
+      name: "11x Pitch Shaft"
+    "228-2500-263":
+      name: "12x Pitch Shaft"
+    "228-2500-264":
+      name: "14x Pitch Shaft"
+    "228-2500-265":
+      name: "16x Pitch Shaft"
+    "228-2500-266":
+      name: "18x Pitch Shaft"
+    "228-2500-267":
+      name: "20x Pitch Shaft"
+    "228-2500-268":
+      name: "22x Pitch Shaft"
+    "228-2500-269":
+      name: "24x Pitch Shaft"
+    "228-2500-328":
+      name: "1x Pitch Plastic Motor Snap Shaft"
+
+  # STANDOFF (14 parts)
+  standoff:
+    "228-2500-063":
+      name: "0.25x Pitch Standoff"
+    "228-2500-064":
+      name: "0.5x Pitch Standoff"
+    "228-2500-065":
+      name: "1x Pitch Standoff"
+    "228-2500-066":
+      name: "1.5x Pitch Standoff"
+    "228-2500-067":
+      name: "2x Pitch Standoff"
+    "228-2500-069":
+      name: "3x Pitch Standoff"
+    "228-2500-070":
+      name: "4x Pitch Standoff"
+    "228-2500-072":
+      name: "6x Pitch Standoff"
+    "228-2500-1061":
+      name: "8x Pitch Standoff"
+    "228-2500-109":
+      name: "0.5x Pitch Standoff Extender"
+    "228-2500-1934":
+      name: "6x Pitch Flexible Standoff"
+    "228-2500-2268":
+      name: "0.5x Pitch Standoff (Weak)"
+    "228-2500-2269":
+      name: "1x Pitch Standoff (Weak)"
+    "228-2500-2271":
+      name: "2x Pitch Standoff (Weak)"
+
+  # SPACER (1 parts)
+  spacer:
+    "228-2500-114":
+      name: "0.25x Pitch Spacer"
+
+  # LINEAR MOTION (3 parts)
+  linear_motion:
+    "228-2500-1469":
+      name: "2x Pitch Linear Motion Bracket (Side Mount)"
+    "228-2500-1470":
+      name: "1x Pitch Linear Motion Bracket (Snap)"
+    "228-2500-217":
+      name: "Linear Slide"
+
+  # BEARING (6 parts)
+  bearing:
+    "228-2500-1660":
+      name: "Ball Pin Bushing"
+    "228-2500-191":
+      name: "Small Turntable Center Bushing"
+    "228-2500-194":
+      name: "Large Turntable Center Bushing"
+    "228-2500-197":
+      name: "XL Turntable Spider Bushing"
+    "228-2500-200":
+      name: "XL Turntable Plain Bushing"
+    "228-2500-314":
+      name: "1x4 Bearing Surface Block"
+
+  # TURNTABLE (4 parts)
+  turntable:
+    "228-2500-193":
+      name: "Small Turntable Outer Housing"
+    "228-2500-195":
+      name: "Large Turntable Outer Housing"
+    "228-2500-196":
+      name: "XL Turntable Spider Housing"
+    "228-2500-199":
+      name: "XL Turntable Outer Housing"
+
+  # MECHANISM (2 parts)
+  mechanism:
+    "228-2500-1664":
+      name: "1x3 Ball Socket Linkage"
+    "228-2500-1665":
+      name: "1x4 Ball Socket Linkage"
+
+  # MANIPULATOR (5 parts)
+  manipulator:
+    "228-2500-1658":
+      name: "1x3 Large Crane Hook"
+    "228-2500-2028":
+      name: "10x Pitch Wide Front Loader Bucket"
+    "228-2500-2029":
+      name: "4x Pitch Wide Excavator Bucket"
+    "228-2500-294":
+      name: "Ball Machine Claw"
+    "228-2500-299":
+      name: "Skyhook Hood"
+
+  # SUSPENSION (2 parts)
+  suspension:
+    "228-2500-1394":
+      name: "Large Spring Dart"
+    "228-2500-1560":
+      name: "2x Pitch Shock Absorber (Weak)"
+
+  # SPOOL (2 parts)
+  spool:
+    "228-2500-420":
+      name: "1x Wide Spool"
+    "228-2500-421":
+      name: "2x Wide Spool"
+
+  # RUBBER BAND (5 parts)
+  rubber_band:
+    "228-2500-157":
+      name: "Rubber Band Anchor"
+    "228-2500-468":
+      name: "Silicone Rubber Band #32"
+    "228-2500-470":
+      name: "Silicone Rubber Band #117B"
+    "228-2500-474":
+      name: "Silicone Rubber Band Thin #64 (Use 468)"
+    "228-2500-475":
+      name: "Silicone Rubber Band #64"
+
+  # HARDWARE (1 parts)
+  hardware:
+    "228-2500-112":
+      name: "Washer"
+
+  # BATTERY (1 parts)
+  battery:
+    "228-2604":
+      name: "Robot Battery"
+
+  # RADIO (1 parts)
+  radio:
+    "228-2621":
+      name: "900 MHz Radio"
+
+  # CABLE (1 parts)
+  cable:
+    "228-2780":
+      name: "Cable"
+
+  # DECORATIVE (22 parts)
+  decorative:
+    "228-2500-1446":
+      name: "Propeller Clutch (CCW)"
+    "228-2500-1447":
+      name: "Zip Flyer Propeller (CCW)"
+    "228-2500-1700":
+      name: "Airplane Nose Hook"
+    "228-2500-1900":
+      name: "1.5x3 Oblong Satellite Dish"
+    "228-2500-1905":
+      name: "2.5x1.4 Widescreen Monitor"
+    "228-2500-1906":
+      name: "4x Pitch Antenna"
+    "228-2500-1909":
+      name: "1x Pitch Actuator Handle"
+    "228-2500-1919":
+      name: "3x Pitch 6-Blade Fan (CCW)"
+    "228-2500-1922":
+      name: "4x Pitch 6-Blade Fan (CCW)"
+    "228-2500-2012":
+      name: "Right Shuttle Wing"
+    "228-2500-204":
+      name: "6x Pitch Cube Face"
+    "228-2500-288":
+      name: "Racer Windscreen"
+    "228-2500-293":
+      name: "1x8 Ballista Arm"
+    "228-2500-300":
+      name: "Strandbeast Shoulder Blade"
+    "228-2500-301":
+      name: "Strandbeast Leg"
+    "228-2500-306":
+      name: "Spider Leg"
+    "228-2500-310":
+      name: "Scarab Leg"
+    "228-2500-313":
+      name: "Scarab Rear Shell"
+    "228-2500-320":
+      name: "Ant Front Antenna"
+    "228-2500-321":
+      name: "Ant Rear Antenna"
+    "228-2500-354":
+      name: "Hand Knob"
+    "228-2500-473":
+      name: "Hand Knob"
+
+  # OTHER (46 parts)
+  other:
+    "228-2500-1277":
+      name: "25mm Half Tube 6x Pitch Straight"
+    "228-2500-1287":
+      name: "25mm Half Tube 60 Degree Turn Small"
+    "228-2500-1302":
+      name: "25mm Half Tube 3x Pitch Barrel End"
+    "228-2500-1303":
+      name: "Cam Follower"
+    "228-2500-1305":
+      name: "Small 2x Pitch Drop Cam"
+    "228-2500-1306":
+      name: "Large 1x Pitch Drop Cam"
+    "228-2500-1407":
+      name: "16 Tooth Ratchet"
+    "228-2500-1410":
+      name: "40 Tooth Ratchet"
+    "228-2500-1411":
+      name: "Short Low-Profile Pawl"
+    "228-2500-158":
+      name: "Cable Anchor"
+    "228-2500-159":
+      name: "Single Motor Support Cap"
+    "228-2500-160":
+      name: "Dual Motor Support Cap"
+    "228-2500-1853":
+      name: "Minifigure Shoulder Pin"
+    "228-2500-1859":
+      name: "Minifigure Seat (Snap Mount)"
+    "228-2500-1907":
+      name: "Small Auger Drill Bit"
+    "228-2500-1908":
+      name: "Small Gripper Actuator"
+    "228-2500-1911":
+      name: "Medium Rocket Engine Nozzle"
+    "228-2500-1918":
+      name: "3x Pitch Ducted Fan Housing"
+    "228-2500-1921":
+      name: "4x Pitch Ducted Fan Housing"
+    "228-2500-1950":
+      name: "2x Wide, 32.2mm Diameter Hub"
+    "228-2500-1953":
+      name: "2x Wide, 48.5mm Diameter Hub"
+    "228-2500-2002":
+      name: "3x5x3.5 Vehicle Cab"
+    "228-2500-2019":
+      name: "2x3x2.5 Roll Cage"
+    "228-2500-2023":
+      name: "Large Vehicle Cab 4x Wide Windshield"
+    "228-2500-2024":
+      name: "2x Wide, 4x Pitch Diameter Half Puck"
+    "228-2500-2248":
+      name: "5x Pitch Weighted Disk Housing"
+    "228-2500-240":
+      name: "Short Intake Flap"
+    "228-2500-241":
+      name: "Medium Intake Flap"
+    "228-2500-242":
+      name: "Long Intake Flap"
+    "228-2500-2710":
+      name: "2x12 Plastic Sheet"
+    "228-2500-2711":
+      name: "6x6 Plastic Sheet"
+    "228-2500-2712":
+      name: "6x12 Plastic Sheet"
+    "228-2500-289":
+      name: "Hex Cup Half"
+    "228-2500-295":
+      name: "Track Tiebar with Mounting"
+    "228-2500-296":
+      name: "Track Tiebar"
+    "228-2500-303":
+      name: "Strandbeast Spine Arch"
+    "228-2500-311":
+      name: "Scarab Top Shell"
+    "228-2500-312":
+      name: "Scarab Front Shell"
+    "228-2500-324":
+      name: "1.5x Pitch Screw Segment (CW)"
+    "228-2500-355":
+      name: "Dial Knob"
+    "228-2500-430":
+      name: "12x Pitch Rope"
+    "228-2500-436":
+      name: "20x Pitch Rope"
+    "228-2500-438":
+      name: "24x Pitch Rope"
+    "228-2500-442":
+      name: "48x Pitch Rope"
+    "228-2500-448":
+      name: "120x Pitch Rope"
+    "228-2500-477":
+      name: "Medium Dial Knob"
+
+  # LOCK (2 parts)
+  lock:
+    "228-2500-225":
+      name: "Inner Twist Lock Collar"
+    "228-2500-226":
+      name: "Outer Twist Lock Collar"
