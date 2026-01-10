@@ -79,6 +79,7 @@
 #include "physics/drivetrain.h"
 #include "physics/robotdef.h"
 #include "physics/collision.h"
+#include "physics/obb.h"
 #include "ipc/gamepad.h"
 #include "ipc/python_bridge.h"
 
@@ -298,6 +299,18 @@ struct WheelAssembly {
     bool is_left;
 };
 
+// Maximum submodels and parts for collision
+#define MAX_ROBOT_SUBMODELS 64
+#define MAX_ROBOT_PARTS 512
+
+// Collision state for hierarchical detection
+enum CollisionState {
+    COLLISION_NONE = 0,       // No collision (green)
+    COLLISION_SUBMODEL = 1,   // Submodel boundary hit (yellow)
+    COLLISION_PART = 2,       // Part collision (red)
+    COLLISION_EXTERNAL = 3    // External object (orange)
+};
+
 // Robot instance (loaded from scene)
 struct RobotInstance {
     float offset[3];      // World position offset (inches)
@@ -315,8 +328,22 @@ struct RobotInstance {
     WheelAssembly wheels[ROBOTDEF_MAX_WHEELS];
     int wheel_count;
 
-    // Collision
+    // Collision (legacy circle)
     float collision_radius;    // Computed from bounding box (max XZ extent from center)
+
+    // Hierarchical OBB collision data (in robot-local OpenGL coordinates)
+    OBB submodel_obbs[MAX_ROBOT_SUBMODELS];  // OBBs for each submodel
+    int submodel_collision_state[MAX_ROBOT_SUBMODELS];  // Collision state per submodel
+    char submodel_names[MAX_ROBOT_SUBMODELS][128];  // Submodel names for debugging
+    int submodel_count;
+
+    // Part indices for each submodel (for hierarchical lookup)
+    int submodel_part_start[MAX_ROBOT_SUBMODELS];  // First part index for this submodel
+    int submodel_part_count[MAX_ROBOT_SUBMODELS];  // Number of parts in this submodel
+
+    // First part index in global parts array (for this robot)
+    size_t parts_start_index;
+    size_t parts_count;
 };
 
 // Part instance for rendering
@@ -329,6 +356,11 @@ struct PartInstance {
     int robot_index;      // Which robot this part belongs to (-1 = no robot)
     int wheel_index;      // Which wheel assembly this part belongs to (-1 = not a wheel)
     char part_number[32]; // Part number for wheel matching
+
+    // Collision data
+    int submodel_index;   // Which submodel this part belongs to (-1 = none)
+    OBB local_obb;        // OBB in robot-local OpenGL coordinates
+    int collision_state;  // Current collision state (for debug coloring)
 };
 
 // Get the directory containing the executable
@@ -602,6 +634,348 @@ static float compute_ground_offset(const std::vector<PartInstance>& parts, int r
     return (min_y == FLT_MAX) ? 0.0f : -min_y;
 }
 
+// Compute a part's local OBB in robot-local OpenGL coordinates
+// This transforms the mesh bounding box by the part's LDraw transform,
+// converts to OpenGL coordinates, and makes it relative to the robot's rotation center
+static void compute_part_local_obb(PartInstance* part, const float* rotation_center_ldu) {
+    if (!part->mesh) {
+        // Default empty OBB
+        part->local_obb.center = vec3(0, 0, 0);
+        part->local_obb.half_extents = vec3(0, 0, 0);
+        part->local_obb.rotation[0] = 1; part->local_obb.rotation[1] = 0; part->local_obb.rotation[2] = 0;
+        part->local_obb.rotation[3] = 0; part->local_obb.rotation[4] = 1; part->local_obb.rotation[5] = 0;
+        part->local_obb.rotation[6] = 0; part->local_obb.rotation[7] = 0; part->local_obb.rotation[8] = 1;
+        return;
+    }
+
+    // LDraw rotation matrix (row-major)
+    float a = part->rotation[0], b = part->rotation[1], c = part->rotation[2];
+    float d = part->rotation[3], e = part->rotation[4], f = part->rotation[5];
+    float g = part->rotation[6], h = part->rotation[7], i = part->rotation[8];
+
+    // Convert rotation from LDraw to OpenGL: C*M*C where C = diag(1,-1,-1)
+    float a2 = a,  b2 = -b, c2 = -c;
+    float d2 = -d, e2 = e,  f2 = f;
+    float g2 = -g, h2 = h,  i2 = i;
+
+    // Store converted rotation in OBB (row-major)
+    part->local_obb.rotation[0] = a2; part->local_obb.rotation[1] = b2; part->local_obb.rotation[2] = c2;
+    part->local_obb.rotation[3] = d2; part->local_obb.rotation[4] = e2; part->local_obb.rotation[5] = f2;
+    part->local_obb.rotation[6] = g2; part->local_obb.rotation[7] = h2; part->local_obb.rotation[8] = i2;
+
+    // Mesh bounds (in GLB/OpenGL space)
+    Vec3 mesh_min = vec3(part->mesh->min_bounds[0], part->mesh->min_bounds[1], part->mesh->min_bounds[2]);
+    Vec3 mesh_max = vec3(part->mesh->max_bounds[0], part->mesh->max_bounds[1], part->mesh->max_bounds[2]);
+
+    // Half extents from mesh bounds (don't change - they're in local mesh space)
+    part->local_obb.half_extents.x = (mesh_max.x - mesh_min.x) * 0.5f;
+    part->local_obb.half_extents.y = (mesh_max.y - mesh_min.y) * 0.5f;
+    part->local_obb.half_extents.z = (mesh_max.z - mesh_min.z) * 0.5f;
+
+    // Center of mesh bounds (in mesh local space)
+    Vec3 mesh_center;
+    mesh_center.x = (mesh_min.x + mesh_max.x) * 0.5f;
+    mesh_center.y = (mesh_min.y + mesh_max.y) * 0.5f;
+    mesh_center.z = (mesh_min.z + mesh_max.z) * 0.5f;
+
+    // Transform mesh center by part rotation (in OpenGL space)
+    float cx = a2 * mesh_center.x + b2 * mesh_center.y + c2 * mesh_center.z;
+    float cy = d2 * mesh_center.x + e2 * mesh_center.y + f2 * mesh_center.z;
+    float cz = g2 * mesh_center.x + h2 * mesh_center.y + i2 * mesh_center.z;
+
+    // Part position converted from LDraw to OpenGL, relative to rotation center
+    float px = (part->position[0] - rotation_center_ldu[0]) * LDU_SCALE;
+    float py = -(part->position[1] - rotation_center_ldu[1]) * LDU_SCALE;  // Y flipped
+    float pz = -(part->position[2] - rotation_center_ldu[2]) * LDU_SCALE;  // Z flipped
+
+    // Final center = part position + rotated mesh center
+    part->local_obb.center.x = px + cx;
+    part->local_obb.center.y = py + cy;
+    part->local_obb.center.z = pz + cz;
+}
+
+// Compute submodel OBB by combining all part OBBs in that submodel
+// Uses AABB encompassing all parts, then creates OBB with identity rotation
+static void compute_submodel_obb(RobotInstance* robot, int submodel_idx,
+                                  const std::vector<PartInstance>& parts) {
+    if (submodel_idx < 0 || submodel_idx >= robot->submodel_count) return;
+
+    int start = robot->submodel_part_start[submodel_idx];
+    int count = robot->submodel_part_count[submodel_idx];
+
+    if (count == 0) {
+        // Empty submodel
+        robot->submodel_obbs[submodel_idx].center = vec3(0, 0, 0);
+        robot->submodel_obbs[submodel_idx].half_extents = vec3(0, 0, 0);
+        return;
+    }
+
+    // Find AABB encompassing all parts in this submodel
+    float min_x = FLT_MAX, min_y = FLT_MAX, min_z = FLT_MAX;
+    float max_x = -FLT_MAX, max_y = -FLT_MAX, max_z = -FLT_MAX;
+
+    for (int i = 0; i < count; i++) {
+        size_t part_idx = robot->parts_start_index + start + i;
+        if (part_idx >= parts.size()) continue;
+
+        const PartInstance& part = parts[part_idx];
+        if (!part.mesh) continue;
+
+        // Get corners of part OBB
+        Vec3 corners[8];
+        obb_get_corners(&part.local_obb, corners);
+
+        for (int c = 0; c < 8; c++) {
+            if (corners[c].x < min_x) min_x = corners[c].x;
+            if (corners[c].y < min_y) min_y = corners[c].y;
+            if (corners[c].z < min_z) min_z = corners[c].z;
+            if (corners[c].x > max_x) max_x = corners[c].x;
+            if (corners[c].y > max_y) max_y = corners[c].y;
+            if (corners[c].z > max_z) max_z = corners[c].z;
+        }
+    }
+
+    // Create AABB-style OBB (identity rotation)
+    OBB* obb = &robot->submodel_obbs[submodel_idx];
+    obb->center.x = (min_x + max_x) * 0.5f;
+    obb->center.y = (min_y + max_y) * 0.5f;
+    obb->center.z = (min_z + max_z) * 0.5f;
+    obb->half_extents.x = (max_x - min_x) * 0.5f;
+    obb->half_extents.y = (max_y - min_y) * 0.5f;
+    obb->half_extents.z = (max_z - min_z) * 0.5f;
+
+    // Identity rotation (submodel OBB is axis-aligned in robot local space)
+    obb->rotation[0] = 1; obb->rotation[1] = 0; obb->rotation[2] = 0;
+    obb->rotation[3] = 0; obb->rotation[4] = 1; obb->rotation[5] = 0;
+    obb->rotation[6] = 0; obb->rotation[7] = 0; obb->rotation[8] = 1;
+}
+
+// Transform a robot's local OBB to world space
+static void transform_obb_to_world(const OBB* local_obb, const RobotInstance* robot, OBB* world_obb) {
+    // Robot world position (offset from drivetrain)
+    Vec3 robot_pos = vec3(robot->offset[0], robot->ground_offset, robot->offset[2]);
+
+    // Get robot's Y rotation matrix
+    float rot[9];
+    mat3_rotation_y(robot->rotation_y, rot);
+
+    // Transform OBB to world space
+    obb_transform_matrix(local_obb, robot_pos, rot, world_obb);
+}
+
+// Hierarchical collision detection between two robots
+// Returns true if any collision detected, updates collision states
+static bool check_robot_robot_collision(
+    RobotInstance* robot_a, int robot_a_idx,
+    RobotInstance* robot_b, int robot_b_idx,
+    std::vector<PartInstance>& parts)
+{
+    bool any_collision = false;
+
+    // Reset collision states for both robots
+    for (int sm = 0; sm < robot_a->submodel_count; sm++) {
+        robot_a->submodel_collision_state[sm] = COLLISION_NONE;
+    }
+    for (int sm = 0; sm < robot_b->submodel_count; sm++) {
+        robot_b->submodel_collision_state[sm] = COLLISION_NONE;
+    }
+
+    // Check submodel-submodel collisions (Level 1)
+    for (int sm_a = 0; sm_a < robot_a->submodel_count; sm_a++) {
+        OBB world_obb_a;
+        transform_obb_to_world(&robot_a->submodel_obbs[sm_a], robot_a, &world_obb_a);
+
+        for (int sm_b = 0; sm_b < robot_b->submodel_count; sm_b++) {
+            OBB world_obb_b;
+            transform_obb_to_world(&robot_b->submodel_obbs[sm_b], robot_b, &world_obb_b);
+
+            if (obb_intersects_obb(&world_obb_a, &world_obb_b)) {
+                // Submodels intersect - mark as yellow (checking parts)
+                robot_a->submodel_collision_state[sm_a] = COLLISION_SUBMODEL;
+                robot_b->submodel_collision_state[sm_b] = COLLISION_SUBMODEL;
+                any_collision = true;
+
+                // Level 2: Check part-part collisions within these submodels
+                int start_a = robot_a->submodel_part_start[sm_a];
+                int count_a = robot_a->submodel_part_count[sm_a];
+                int start_b = robot_b->submodel_part_start[sm_b];
+                int count_b = robot_b->submodel_part_count[sm_b];
+
+                for (int pa = 0; pa < count_a; pa++) {
+                    size_t idx_a = robot_a->parts_start_index + start_a + pa;
+                    if (idx_a >= parts.size()) continue;
+                    PartInstance& part_a = parts[idx_a];
+                    if (!part_a.mesh) continue;
+
+                    OBB world_part_a;
+                    transform_obb_to_world(&part_a.local_obb, robot_a, &world_part_a);
+
+                    for (int pb = 0; pb < count_b; pb++) {
+                        size_t idx_b = robot_b->parts_start_index + start_b + pb;
+                        if (idx_b >= parts.size()) continue;
+                        PartInstance& part_b = parts[idx_b];
+                        if (!part_b.mesh) continue;
+
+                        OBB world_part_b;
+                        transform_obb_to_world(&part_b.local_obb, robot_b, &world_part_b);
+
+                        if (obb_intersects_obb(&world_part_a, &world_part_b)) {
+                            // Part collision - mark as red
+                            part_a.collision_state = COLLISION_PART;
+                            part_b.collision_state = COLLISION_PART;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return any_collision;
+}
+
+// Check robot collision against field walls (AABB)
+static bool check_robot_wall_collision(
+    RobotInstance* robot, int robot_idx,
+    std::vector<PartInstance>& parts,
+    float field_half_width, float field_half_depth)
+{
+    bool any_collision = false;
+
+    // Create AABBs for each wall
+    AABB walls[4];
+    // Left wall (min X)
+    walls[0].min = vec3(-field_half_width - 1.0f, 0.0f, -field_half_depth);
+    walls[0].max = vec3(-field_half_width, 10.0f, field_half_depth);
+    // Right wall (max X)
+    walls[1].min = vec3(field_half_width, 0.0f, -field_half_depth);
+    walls[1].max = vec3(field_half_width + 1.0f, 10.0f, field_half_depth);
+    // Back wall (min Z)
+    walls[2].min = vec3(-field_half_width, 0.0f, -field_half_depth - 1.0f);
+    walls[2].max = vec3(field_half_width, 10.0f, -field_half_depth);
+    // Front wall (max Z)
+    walls[3].min = vec3(-field_half_width, 0.0f, field_half_depth);
+    walls[3].max = vec3(field_half_width, 10.0f, field_half_depth + 1.0f);
+
+    // Check each submodel against walls
+    for (int sm = 0; sm < robot->submodel_count; sm++) {
+        OBB world_obb;
+        transform_obb_to_world(&robot->submodel_obbs[sm], robot, &world_obb);
+
+        for (int w = 0; w < 4; w++) {
+            if (obb_intersects_aabb(&world_obb, &walls[w])) {
+                // Submodel hits wall - mark as checking
+                if (robot->submodel_collision_state[sm] < COLLISION_SUBMODEL) {
+                    robot->submodel_collision_state[sm] = COLLISION_SUBMODEL;
+                }
+                any_collision = true;
+
+                // Check parts in this submodel
+                int start = robot->submodel_part_start[sm];
+                int count = robot->submodel_part_count[sm];
+
+                for (int p = 0; p < count; p++) {
+                    size_t idx = robot->parts_start_index + start + p;
+                    if (idx >= parts.size()) continue;
+                    PartInstance& part = parts[idx];
+                    if (!part.mesh) continue;
+
+                    OBB world_part;
+                    transform_obb_to_world(&part.local_obb, robot, &world_part);
+
+                    if (obb_intersects_aabb(&world_part, &walls[w])) {
+                        part.collision_state = COLLISION_EXTERNAL;
+                    }
+                }
+            }
+        }
+    }
+
+    return any_collision;
+}
+
+// Check robot collision against cylinders
+static bool check_robot_cylinder_collision(
+    RobotInstance* robot, int robot_idx,
+    std::vector<PartInstance>& parts,
+    const Scene* scene)
+{
+    bool any_collision = false;
+
+    for (uint32_t c = 0; c < scene->cylinder_count; c++) {
+        const SceneCylinder& cyl = scene->cylinders[c];
+
+        // Check each submodel against this cylinder
+        for (int sm = 0; sm < robot->submodel_count; sm++) {
+            OBB world_obb;
+            transform_obb_to_world(&robot->submodel_obbs[sm], robot, &world_obb);
+
+            if (obb_intersects_circle(&world_obb, cyl.x, cyl.z, cyl.radius)) {
+                // Submodel hits cylinder - mark as checking
+                if (robot->submodel_collision_state[sm] < COLLISION_SUBMODEL) {
+                    robot->submodel_collision_state[sm] = COLLISION_SUBMODEL;
+                }
+                any_collision = true;
+
+                // Check parts in this submodel
+                int start = robot->submodel_part_start[sm];
+                int count = robot->submodel_part_count[sm];
+
+                for (int p = 0; p < count; p++) {
+                    size_t idx = robot->parts_start_index + start + p;
+                    if (idx >= parts.size()) continue;
+                    PartInstance& part = parts[idx];
+                    if (!part.mesh) continue;
+
+                    OBB world_part;
+                    transform_obb_to_world(&part.local_obb, robot, &world_part);
+
+                    if (obb_intersects_circle(&world_part, cyl.x, cyl.z, cyl.radius)) {
+                        part.collision_state = COLLISION_EXTERNAL;
+                    }
+                }
+            }
+        }
+    }
+
+    return any_collision;
+}
+
+// Reset all collision states for all robots
+static void reset_collision_states(std::vector<RobotInstance>& robots, std::vector<PartInstance>& parts) {
+    for (auto& robot : robots) {
+        for (int sm = 0; sm < robot.submodel_count; sm++) {
+            robot.submodel_collision_state[sm] = COLLISION_NONE;
+        }
+    }
+    for (auto& part : parts) {
+        part.collision_state = COLLISION_NONE;
+    }
+}
+
+// Run full hierarchical collision detection
+static void run_hierarchical_collision_detection(
+    std::vector<RobotInstance>& robots,
+    std::vector<PartInstance>& parts,
+    const Scene* scene,
+    float field_half_width, float field_half_depth)
+{
+    // Reset all collision states
+    reset_collision_states(robots, parts);
+
+    // Check robot-robot collisions
+    for (size_t i = 0; i < robots.size(); i++) {
+        for (size_t j = i + 1; j < robots.size(); j++) {
+            check_robot_robot_collision(&robots[i], (int)i, &robots[j], (int)j, parts);
+        }
+    }
+
+    // Check robot-wall and robot-cylinder collisions
+    for (size_t i = 0; i < robots.size(); i++) {
+        check_robot_wall_collision(&robots[i], (int)i, parts, field_half_width, field_half_depth);
+        check_robot_cylinder_collision(&robots[i], (int)i, parts, scene);
+    }
+}
+
 int main(int argc, char** argv) {
     printf("VEX IQ Simulator - C++ Client\n");
     printf("=============================\n\n");
@@ -843,10 +1217,49 @@ int main(int argc, char** argv) {
                         inst.part_number[len-3] = '\0';
                     }
 
+                    // Store submodel index from MPD for hierarchical collision
+                    inst.submodel_index = part->submodel_index;
+                    inst.collision_state = COLLISION_NONE;
+
                     parts.push_back(inst);
                     total_triangles += mesh->index_count / 3;
                 }
             }
+
+            // Store submodel info from MPD before freeing it
+            RobotInstance& r_submodel = robots[current_robot_index];
+            r_submodel.submodel_count = (int)doc.submodel_count;
+            r_submodel.parts_start_index = robot_part_start;
+            r_submodel.parts_count = parts.size() - robot_part_start;
+
+            // Initialize submodel tracking arrays
+            for (int sm = 0; sm < MAX_ROBOT_SUBMODELS; sm++) {
+                r_submodel.submodel_part_start[sm] = 0;
+                r_submodel.submodel_part_count[sm] = 0;
+                r_submodel.submodel_collision_state[sm] = COLLISION_NONE;
+                r_submodel.submodel_names[sm][0] = '\0';
+            }
+
+            // Copy submodel names and part ranges from MPD
+            for (uint32_t sm = 0; sm < doc.submodel_count && sm < MAX_ROBOT_SUBMODELS; sm++) {
+                strncpy(r_submodel.submodel_names[sm], doc.submodels[sm].name, 127);
+                r_submodel.submodel_names[sm][127] = '\0';
+                r_submodel.submodel_part_start[sm] = (int)doc.submodels[sm].part_start;
+                r_submodel.submodel_part_count[sm] = (int)doc.submodels[sm].part_count;
+            }
+
+            // Compute local OBBs for all parts in this robot
+            for (size_t pi = robot_part_start; pi < parts.size(); pi++) {
+                compute_part_local_obb(&parts[pi], robots[current_robot_index].rotation_center);
+            }
+
+            // Compute submodel OBBs from part OBBs
+            for (int sm = 0; sm < r_submodel.submodel_count; sm++) {
+                compute_submodel_obb(&robots[current_robot_index], sm, parts);
+            }
+
+            printf("  Submodels: %d, Parts with OBBs: %zu\n",
+                   r_submodel.submodel_count, parts.size() - robot_part_start);
 
             mpd_free(&doc);
 
@@ -1179,6 +1592,13 @@ int main(int argc, char** argv) {
             }
         }
 
+        // Step 5: Hierarchical collision detection (for debug visualization only)
+        // This detects which parts are colliding but doesn't affect physics yet
+        if (show_bounding_boxes) {
+            run_hierarchical_collision_detection(robots, parts, &scene,
+                                                  FIELD_WIDTH / 2.0f, FIELD_DEPTH / 2.0f);
+        }
+
         // Update camera
         camera_update(&camera, &input, dt);
 
@@ -1216,111 +1636,94 @@ int main(int argc, char** argv) {
             mesh_render(part.mesh, &model, &view, &projection, light_dir, color);
         }
 
-        // Debug rendering (bounding boxes)
+        // Debug rendering (hierarchical OBB collision visualization)
         if (show_bounding_boxes) {
             debug_begin(&view, &projection);
 
-            // Colors for different robots
-            Vec3 robot_colors[] = {
-                vec3(0.0f, 1.0f, 0.0f),   // Green
-                vec3(0.0f, 0.5f, 1.0f),   // Blue
-                vec3(1.0f, 0.5f, 0.0f),   // Orange
-                vec3(1.0f, 0.0f, 1.0f),   // Magenta
-            };
-            int num_colors = sizeof(robot_colors) / sizeof(robot_colors[0]);
+            // Collision state colors:
+            // Green = no collision, Yellow = submodel boundary hit (checking parts)
+            // Red = part-part collision, Orange = external object collision
+            Vec3 color_none = vec3(0.0f, 0.8f, 0.0f);      // Green
+            Vec3 color_submodel = vec3(1.0f, 1.0f, 0.0f);  // Yellow
+            Vec3 color_part = vec3(1.0f, 0.0f, 0.0f);      // Red
+            Vec3 color_external = vec3(1.0f, 0.5f, 0.0f);  // Orange
 
-            // Track robot bounding boxes for combined display
-            struct RobotBounds {
-                float min_x, min_y, min_z;
-                float max_x, max_y, max_z;
-                bool initialized;
-            };
-            std::vector<RobotBounds> robot_bounds(robots.size());
-            for (auto& rb : robot_bounds) {
-                rb.initialized = false;
-                rb.min_x = rb.min_y = rb.min_z = FLT_MAX;
-                rb.max_x = rb.max_y = rb.max_z = -FLT_MAX;
+            // Draw submodel OBBs for each robot
+            for (size_t ri = 0; ri < robots.size(); ri++) {
+                const RobotInstance& robot = robots[ri];
+
+                for (int sm = 0; sm < robot.submodel_count; sm++) {
+                    // Transform submodel OBB to world space
+                    OBB world_obb;
+                    transform_obb_to_world(&robot.submodel_obbs[sm], &robot, &world_obb);
+
+                    // Get color based on collision state
+                    Vec3 color;
+                    switch (robot.submodel_collision_state[sm]) {
+                        case COLLISION_SUBMODEL: color = color_submodel; break;
+                        case COLLISION_PART: color = color_part; break;
+                        case COLLISION_EXTERNAL: color = color_external; break;
+                        default: color = color_none; break;
+                    }
+
+                    // Draw submodel OBB
+                    Vec3 corners[8];
+                    obb_get_corners(&world_obb, corners);
+
+                    // Draw the 12 edges of the OBB
+                    int edges[12][2] = {
+                        {0,1}, {1,2}, {2,3}, {3,0},  // Bottom face
+                        {4,5}, {5,6}, {6,7}, {7,4},  // Top face
+                        {0,4}, {1,5}, {2,6}, {3,7}   // Vertical edges
+                    };
+                    for (int e = 0; e < 12; e++) {
+                        debug_draw_line(corners[edges[e][0]], corners[edges[e][1]], color);
+                    }
+                }
+
+                // Draw robot origin axes
+                Vec3 origin = vec3(robot.offset[0], robot.ground_offset, robot.offset[2]);
+                debug_draw_axes(origin, 6.0f);  // 6 inch axes
             }
 
-            // Draw bounding box for each part
+            // Draw part OBBs only for parts with collisions (to avoid clutter)
             for (const auto& part : parts) {
                 if (!part.mesh) continue;
+                if (part.collision_state == COLLISION_NONE) continue;  // Skip non-colliding parts
 
-                const RobotInstance* robot = nullptr;
-                const WheelAssembly* wheel = nullptr;
-                if (part.robot_index >= 0 && part.robot_index < (int)robots.size()) {
-                    robot = &robots[part.robot_index];
-                    if (part.wheel_index >= 0 && part.wheel_index < robot->wheel_count) {
-                        wheel = &robot->wheels[part.wheel_index];
-                    }
-                }
-                Mat4 model = build_ldraw_model_matrix(part.position, part.rotation, robot, wheel);
+                if (part.robot_index < 0 || part.robot_index >= (int)robots.size()) continue;
+                const RobotInstance* robot = &robots[part.robot_index];
 
-                // Get color based on robot index
-                Vec3 color = vec3(0.5f, 0.5f, 0.5f);  // Gray for no robot
-                if (part.robot_index >= 0) {
-                    color = robot_colors[part.robot_index % num_colors];
-                    // Dim it for per-part boxes
-                    color = vec3(color.x * 0.4f, color.y * 0.4f, color.z * 0.4f);
+                // Transform part OBB to world space
+                OBB world_obb;
+                transform_obb_to_world(&part.local_obb, robot, &world_obb);
+
+                // Get color based on collision state
+                Vec3 color;
+                switch (part.collision_state) {
+                    case COLLISION_PART: color = color_part; break;
+                    case COLLISION_EXTERNAL: color = color_external; break;
+                    default: color = vec3(0.5f, 0.5f, 0.5f); break;  // Gray fallback
                 }
 
-                // Draw part bounding box (transformed)
-                debug_draw_box_transformed(&model, part.mesh->min_bounds, part.mesh->max_bounds, color);
-
-                // Accumulate robot bounds
-                if (part.robot_index >= 0 && show_robot_bounds) {
-                    RobotBounds& rb = robot_bounds[part.robot_index];
-
-                    // Transform all 8 corners of the part's bounding box
-                    for (int corner = 0; corner < 8; corner++) {
-                        float lx = (corner & 1) ? part.mesh->max_bounds[0] : part.mesh->min_bounds[0];
-                        float ly = (corner & 2) ? part.mesh->max_bounds[1] : part.mesh->min_bounds[1];
-                        float lz = (corner & 4) ? part.mesh->max_bounds[2] : part.mesh->min_bounds[2];
-
-                        // Transform to world space
-                        float wx = model.m[0]*lx + model.m[4]*ly + model.m[8]*lz + model.m[12];
-                        float wy = model.m[1]*lx + model.m[5]*ly + model.m[9]*lz + model.m[13];
-                        float wz = model.m[2]*lx + model.m[6]*ly + model.m[10]*lz + model.m[14];
-
-                        // Expand robot bounds
-                        if (wx < rb.min_x) rb.min_x = wx;
-                        if (wy < rb.min_y) rb.min_y = wy;
-                        if (wz < rb.min_z) rb.min_z = wz;
-                        if (wx > rb.max_x) rb.max_x = wx;
-                        if (wy > rb.max_y) rb.max_y = wy;
-                        if (wz > rb.max_z) rb.max_z = wz;
-                        rb.initialized = true;
-                    }
+                // Draw part OBB
+                Vec3 corners[8];
+                obb_get_corners(&world_obb, corners);
+                int edges[12][2] = {
+                    {0,1}, {1,2}, {2,3}, {3,0},
+                    {4,5}, {5,6}, {6,7}, {7,4},
+                    {0,4}, {1,5}, {2,6}, {3,7}
+                };
+                for (int e = 0; e < 12; e++) {
+                    debug_draw_line(corners[edges[e][0]], corners[edges[e][1]], color);
                 }
             }
 
-            // Draw combined robot bounding boxes (brighter)
+            // Draw legacy collision circle (for comparison during transition)
             if (show_robot_bounds) {
-                for (size_t i = 0; i < robot_bounds.size(); i++) {
-                    const RobotBounds& rb = robot_bounds[i];
-                    if (!rb.initialized) continue;
-
-                    Vec3 color = robot_colors[i % num_colors];
-                    Vec3 center = vec3(
-                        (rb.min_x + rb.max_x) / 2.0f,
-                        (rb.min_y + rb.max_y) / 2.0f,
-                        (rb.min_z + rb.max_z) / 2.0f
-                    );
-                    Vec3 half_extents = vec3(
-                        (rb.max_x - rb.min_x) / 2.0f,
-                        (rb.max_y - rb.min_y) / 2.0f,
-                        (rb.max_z - rb.min_z) / 2.0f
-                    );
-
-                    debug_draw_box(center, half_extents, color);
-
-                    // Draw robot origin axes
-                    Vec3 origin = vec3(robots[i].offset[0], robots[i].ground_offset, robots[i].offset[2]);
-                    debug_draw_axes(origin, 6.0f);  // 6 inch axes
-
-                    // Draw collision circle (as cylinder at ground level)
+                for (size_t i = 0; i < robots.size(); i++) {
                     Vec3 collision_center = vec3(robots[i].offset[0], 2.0f, robots[i].offset[2]);
-                    debug_draw_cylinder(collision_center, robots[i].collision_radius, 2.0f, vec3(1.0f, 1.0f, 0.0f));
+                    debug_draw_cylinder(collision_center, robots[i].collision_radius, 2.0f, vec3(0.3f, 0.3f, 0.3f));
                 }
             }
 

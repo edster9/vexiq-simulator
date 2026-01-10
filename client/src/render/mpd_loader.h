@@ -22,6 +22,7 @@ extern "C" {
 // Maximum limits
 #define MPD_MAX_PARTS 1024
 #define MPD_MAX_NAME 128
+#define MPD_MAX_SUBMODELS 64
 
 // LDraw color codes (VEX IQ palette from LDConfig.ldr)
 typedef struct {
@@ -40,13 +41,23 @@ typedef struct {
     int color_code;                  // LDraw color code
     float x, y, z;                   // Position in LDU
     float rotation[9];               // 3x3 rotation matrix (row-major)
+    int submodel_index;              // Index into submodel_names (-1 for parts directly in main)
 } MpdPart;
+
+// Submodel info (for hierarchical collision)
+typedef struct {
+    char name[MPD_MAX_NAME];         // Submodel name (e.g., "wheelsleft.ldr")
+    uint32_t part_start;             // First part index in parts array
+    uint32_t part_count;             // Number of parts in this submodel
+} MpdSubmodel;
 
 // Loaded MPD document
 typedef struct {
-    char name[MPD_MAX_NAME];         // Model name
-    MpdPart parts[MPD_MAX_PARTS];    // Part placements
-    uint32_t part_count;             // Number of parts
+    char name[MPD_MAX_NAME];                  // Model name
+    MpdPart parts[MPD_MAX_PARTS];             // Part placements
+    uint32_t part_count;                      // Number of parts
+    MpdSubmodel submodels[MPD_MAX_SUBMODELS]; // Submodel info for hierarchy
+    uint32_t submodel_count;                  // Number of submodels
 } MpdDocument;
 
 // Load an MPD or LDR file

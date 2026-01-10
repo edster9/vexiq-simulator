@@ -35,6 +35,7 @@ set(SOURCES
     src/physics/drivetrain.cpp
     src/physics/robotdef.cpp
     src/physics/collision.cpp
+    src/physics/obb.cpp
     src/ipc/subprocess.cpp
     src/ipc/gamepad.cpp
     src/ipc/python_bridge.cpp

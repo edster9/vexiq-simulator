@@ -194,13 +194,15 @@ static bool is_submodel_ref(const char* name) {
 }
 
 // Recursively expand submodel into flat part list
+// current_submodel_idx: index of the top-level submodel we're inside (-1 for main or when not tracking)
 static void expand_submodel(const std::string& name,
                            const std::map<std::string, Submodel>& submodels,
                            float px, float py, float pz,
                            const float* parent_rot,
                            int parent_color,
                            MpdDocument* out_doc,
-                           int depth = 0) {
+                           int depth = 0,
+                           int current_submodel_idx = -1) {
     if (depth > 20) {
         fprintf(stderr, "[MPD] Warning: Max recursion depth reached for %s\n", name.c_str());
         return;
@@ -243,6 +245,9 @@ static void expand_submodel(const std::string& name,
         // Compose rotations
         matrix_multiply(parent_rot, part.rotation, out_part.rotation);
 
+        // Track which submodel this part belongs to
+        out_part.submodel_index = current_submodel_idx;
+
         out_doc->parts[out_doc->part_count++] = out_part;
     }
 
@@ -262,7 +267,24 @@ static void expand_submodel(const std::string& name,
         // Color inheritance
         int new_color = (ref.color_code == 16) ? parent_color : ref.color_code;
 
-        expand_submodel(ref.name, submodels, new_x, new_y, new_z, new_rot, new_color, out_doc, depth + 1);
+        // At depth 0 (main model), each submodel reference becomes a top-level submodel
+        int submodel_idx = current_submodel_idx;
+        if (depth == 0 && out_doc->submodel_count < MPD_MAX_SUBMODELS) {
+            submodel_idx = (int)out_doc->submodel_count;
+            MpdSubmodel* sm = &out_doc->submodels[out_doc->submodel_count++];
+            strncpy(sm->name, ref.name.c_str(), MPD_MAX_NAME - 1);
+            sm->name[MPD_MAX_NAME - 1] = '\0';
+            sm->part_start = out_doc->part_count;
+            sm->part_count = 0;  // Will be updated after expansion
+        }
+
+        uint32_t parts_before = out_doc->part_count;
+        expand_submodel(ref.name, submodels, new_x, new_y, new_z, new_rot, new_color, out_doc, depth + 1, submodel_idx);
+
+        // Update part count for top-level submodels
+        if (depth == 0 && submodel_idx >= 0 && submodel_idx < (int)out_doc->submodel_count) {
+            out_doc->submodels[submodel_idx].part_count = out_doc->part_count - parts_before;
+        }
     }
 }
 
@@ -376,8 +398,8 @@ bool mpd_load(const char* path, MpdDocument* out_doc) {
 
     expand_submodel(main_model, submodels, 0, 0, 0, identity, default_color, out_doc);
 
-    printf("[MPD] Loaded: %s (%u parts from %zu submodels)\n",
-           out_doc->name, out_doc->part_count, submodels.size());
+    printf("[MPD] Loaded: %s (%u parts, %u top-level submodels from %zu total submodels)\n",
+           out_doc->name, out_doc->part_count, out_doc->submodel_count, submodels.size());
 
     return out_doc->part_count > 0;
 }
@@ -389,21 +411,38 @@ void mpd_free(MpdDocument* doc) {
 void mpd_print_info(const MpdDocument* doc) {
     printf("MPD Document: %s\n", doc->name[0] ? doc->name : "(unnamed)");
     printf("  Parts: %u\n", doc->part_count);
+    printf("  Submodels: %u\n", doc->submodel_count);
+
+    // Print submodel info
+    for (uint32_t i = 0; i < doc->submodel_count; i++) {
+        const MpdSubmodel* sm = &doc->submodels[i];
+        printf("    [%u] %s: %u parts (start=%u)\n", i, sm->name, sm->part_count, sm->part_start);
+    }
+
+    // Count parts not in any submodel (directly in main)
+    uint32_t main_parts = 0;
+    for (uint32_t i = 0; i < doc->part_count; i++) {
+        if (doc->parts[i].submodel_index < 0) main_parts++;
+    }
+    if (main_parts > 0) {
+        printf("    [main] %u parts directly in main model\n", main_parts);
+    }
 
     // Just print first 10 and last 5 for large models
     uint32_t show_first = (doc->part_count > 15) ? 10 : doc->part_count;
     uint32_t show_last = (doc->part_count > 15) ? 5 : 0;
 
+    printf("  Part list:\n");
     for (uint32_t i = 0; i < show_first; i++) {
         const MpdPart* p = &doc->parts[i];
-        printf("  [%u] %s (color %d)\n", i, p->part_name, p->color_code);
+        printf("    [%u] %s (color %d, submodel %d)\n", i, p->part_name, p->color_code, p->submodel_index);
     }
 
     if (show_last > 0) {
-        printf("  ... (%u more parts) ...\n", doc->part_count - show_first - show_last);
+        printf("    ... (%u more parts) ...\n", doc->part_count - show_first - show_last);
         for (uint32_t i = doc->part_count - show_last; i < doc->part_count; i++) {
             const MpdPart* p = &doc->parts[i];
-            printf("  [%u] %s (color %d)\n", i, p->part_name, p->color_code);
+            printf("    [%u] %s (color %d, submodel %d)\n", i, p->part_name, p->color_code, p->submodel_index);
         }
     }
 }
