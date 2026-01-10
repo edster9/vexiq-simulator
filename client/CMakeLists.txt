@@ -30,9 +30,11 @@ set(SOURCES
     src/render/mpd_loader.cpp
     src/render/text.cpp
     src/render/debug.cpp
+    src/render/objects.cpp
     src/scene/scene.cpp
     src/physics/drivetrain.cpp
     src/physics/robotdef.cpp
+    src/physics/collision.cpp
     src/ipc/subprocess.cpp
     src/ipc/gamepad.cpp
     src/ipc/python_bridge.cpp

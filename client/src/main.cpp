@@ -74,9 +74,11 @@
 #include "render/mpd_loader.h"
 #include "render/text.h"
 #include "render/debug.h"
+#include "render/objects.h"
 #include "scene/scene.h"
 #include "physics/drivetrain.h"
 #include "physics/robotdef.h"
+#include "physics/collision.h"
 #include "ipc/gamepad.h"
 #include "ipc/python_bridge.h"
 
@@ -312,6 +314,9 @@ struct RobotInstance {
     // Wheel assemblies
     WheelAssembly wheels[ROBOTDEF_MAX_WHEELS];
     int wheel_count;
+
+    // Collision
+    float collision_radius;    // Computed from bounding box (max XZ extent from center)
 };
 
 // Part instance for rendering
@@ -634,6 +639,19 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Initialize game objects
+    GameObjects game_objects;
+    if (!objects_init(&game_objects)) {
+        fprintf(stderr, "Failed to initialize game objects\n");
+        floor_destroy(&floor);
+        platform_shutdown(&platform);
+        return 1;
+    }
+
+    // Initialize collision world
+    CollisionWorld collision_world;
+    collision_init(&collision_world, FIELD_WIDTH, FIELD_DEPTH);
+
     // Initialize axis gizmo (normalized 1.0 length for screen-space rendering)
     AxisGizmo axis_gizmo;
     axis_gizmo_init(&axis_gizmo, 1.0f);
@@ -758,6 +776,7 @@ int main(int argc, char** argv) {
             // Initialize drivetrain at robot's starting position
             drivetrain_init(&robot.drivetrain);
             drivetrain_set_position(&robot.drivetrain, scene_robot->x, scene_robot->z, robot.rotation_y);
+            drivetrain_set_friction(&robot.drivetrain, scene.physics.friction_coeff);
 
             int current_robot_index = (int)robots.size();
             robots.push_back(robot);
@@ -869,15 +888,61 @@ int main(int argc, char** argv) {
                 }
             }
 
-            printf("  Loaded %zu parts, ground offset: %.3f inches (pivot_y: %.3f), wheel parts: %d\n",
+            // Compute collision radius from parts' bounding boxes
+            // Find max XZ extent from robot center (rotation_center)
+            float max_radius_sq = 0.0f;
+            float cx = robots[current_robot_index].rotation_center[0] * LDU_SCALE;
+            float cz = -robots[current_robot_index].rotation_center[2] * LDU_SCALE;  // Z flipped
+
+            for (size_t pi = robot_part_start; pi < parts.size(); pi++) {
+                const PartInstance& p = parts[pi];
+                if (!p.mesh) continue;
+
+                // Transform bounding box corners to world space (at identity rotation)
+                // and find max distance from rotation center in XZ plane
+                for (int corner = 0; corner < 8; corner++) {
+                    float lx = (corner & 1) ? p.mesh->max_bounds[0] : p.mesh->min_bounds[0];
+                    float lz = (corner & 4) ? p.mesh->max_bounds[2] : p.mesh->min_bounds[2];
+
+                    // Apply part position (LDraw coords -> GL coords)
+                    float wx = p.position[0] * LDU_SCALE + lx;
+                    float wz = -p.position[2] * LDU_SCALE + lz;  // Z flipped
+
+                    // Distance from rotation center
+                    float dx = wx - cx;
+                    float dz = wz - cz;
+                    float dist_sq = dx * dx + dz * dz;
+                    if (dist_sq > max_radius_sq) max_radius_sq = dist_sq;
+                }
+            }
+
+            robots[current_robot_index].collision_radius = sqrtf(max_radius_sq);
+            if (robots[current_robot_index].collision_radius < 3.0f) {
+                robots[current_robot_index].collision_radius = 6.0f;  // Fallback minimum
+            }
+
+            // Add robot to collision world with computed radius
+            collision_add_robot(&collision_world, scene_robot->x, scene_robot->z,
+                               robots[current_robot_index].collision_radius);
+
+            printf("  Loaded %zu parts, ground offset: %.3f inches (pivot_y: %.3f), wheel parts: %d, collision radius: %.1f\"\n",
                    parts.size() - robot_part_start,
                    robots[current_robot_index].ground_offset,
                    pivot_gl_y,
-                   wheel_parts_matched);
+                   wheel_parts_matched,
+                   robots[current_robot_index].collision_radius);
         }
 
-        printf("\nScene loaded: %zu robots, %zu total parts, %zu unique meshes, %u triangles\n",
-               robots.size(), parts.size(), mesh_cache.size(), total_triangles);
+        // Load cylinders from scene
+        for (uint32_t i = 0; i < scene.cylinder_count; i++) {
+            const SceneCylinder* cyl = &scene.cylinders[i];
+            objects_add_cylinder(&game_objects, cyl->x, cyl->z, cyl->radius, cyl->height,
+                                cyl->r, cyl->g, cyl->b);
+            collision_add_cylinder(&collision_world, cyl->x, cyl->z, cyl->radius);
+        }
+
+        printf("\nScene loaded: %zu robots, %zu total parts, %zu unique meshes, %u triangles, %u cylinders\n",
+               robots.size(), parts.size(), mesh_cache.size(), total_triangles, scene.cylinder_count);
     } else {
         printf("No scene loaded - running with empty scene\n");
     }
@@ -964,22 +1029,22 @@ int main(int argc, char** argv) {
 
             // W = forward, S = backward
             if (input.keys[SDL_SCANCODE_W]) {
-                left_pct += 50.0f;
-                right_pct += 50.0f;
+                left_pct += 35.0f;
+                right_pct += 35.0f;
             }
             if (input.keys[SDL_SCANCODE_S]) {
-                left_pct -= 50.0f;
-                right_pct -= 50.0f;
+                left_pct -= 35.0f;
+                right_pct -= 35.0f;
             }
             // A = turn left (right faster than left)
             if (input.keys[SDL_SCANCODE_A]) {
-                left_pct -= 30.0f;
-                right_pct += 30.0f;
+                left_pct -= 20.0f;
+                right_pct += 20.0f;
             }
             // D = turn right (left faster than right)
             if (input.keys[SDL_SCANCODE_D]) {
-                left_pct += 30.0f;
-                right_pct -= 30.0f;
+                left_pct += 20.0f;
+                right_pct -= 20.0f;
             }
 
             drivetrain_set_motors(&robots[0].drivetrain, left_pct, right_pct);
@@ -991,30 +1056,89 @@ int main(int argc, char** argv) {
             float right_pct = 0.0f;
 
             if (input.keys[SDL_SCANCODE_UP]) {
-                left_pct += 50.0f;
-                right_pct += 50.0f;
+                left_pct += 35.0f;
+                right_pct += 35.0f;
             }
             if (input.keys[SDL_SCANCODE_DOWN]) {
-                left_pct -= 50.0f;
-                right_pct -= 50.0f;
+                left_pct -= 35.0f;
+                right_pct -= 35.0f;
             }
             if (input.keys[SDL_SCANCODE_LEFT]) {
-                left_pct -= 30.0f;
-                right_pct += 30.0f;
+                left_pct -= 20.0f;
+                right_pct += 20.0f;
             }
             if (input.keys[SDL_SCANCODE_RIGHT]) {
-                left_pct += 30.0f;
-                right_pct -= 30.0f;
+                left_pct += 20.0f;
+                right_pct -= 20.0f;
             }
 
             drivetrain_set_motors(&robots[1].drivetrain, left_pct, right_pct);
         }
 
-        // Update drivetrain physics and sync positions
+        // =====================================================================
+        // Physics update order:
+        // 1. Check collisions at current positions and calculate forces
+        // 2. Apply collision forces to drivetrains
+        // 3. Update drivetrain physics (processes forces, updates positions)
+        // 4. Sync positions for rendering
+        // =====================================================================
+
+        // Step 1: Update collision world with current positions
+        for (size_t i = 0; i < robots.size(); i++) {
+            collision_update_robot(&collision_world, (int)i,
+                                  robots[i].drivetrain.pos_x,
+                                  robots[i].drivetrain.pos_z);
+        }
+
+        // Step 2: Calculate collision forces and apply them to drivetrains
+        // Gather velocities for damping
+        float robot_velocities[COLLISION_MAX_ROBOTS * 2];
+        for (size_t i = 0; i < robots.size(); i++) {
+            robot_velocities[i * 2] = robots[i].drivetrain.vel_x;
+            robot_velocities[i * 2 + 1] = robots[i].drivetrain.vel_z;
+        }
+
+        CollisionResult collision_results[COLLISION_MAX_ROBOTS];
+        if (collision_resolve_forces(&collision_world, robot_velocities, collision_results)) {
+            for (size_t i = 0; i < robots.size(); i++) {
+                drivetrain_apply_force(&robots[i].drivetrain,
+                                      collision_results[i].force_x,
+                                      collision_results[i].force_z);
+            }
+        }
+
+        // Step 3: Update drivetrain physics (processes motor + collision forces)
         for (auto& robot : robots) {
             drivetrain_update(&robot.drivetrain, dt);
+        }
 
-            // Sync drivetrain position back to robot offset for rendering
+        // Step 3b: Position clamp and velocity zero (inelastic collision)
+        for (size_t i = 0; i < robots.size(); i++) {
+            collision_update_robot(&collision_world, (int)i,
+                                  robots[i].drivetrain.pos_x,
+                                  robots[i].drivetrain.pos_z);
+        }
+        float clamped_positions[COLLISION_MAX_ROBOTS * 2];
+        collision_clamp_positions(&collision_world, clamped_positions);
+        for (size_t i = 0; i < robots.size(); i++) {
+            float old_x = robots[i].drivetrain.pos_x;
+            float old_z = robots[i].drivetrain.pos_z;
+            float new_x = clamped_positions[i * 2];
+            float new_z = clamped_positions[i * 2 + 1];
+
+            // If position was clamped, zero velocity in that direction
+            if (new_x != old_x) {
+                robots[i].drivetrain.pos_x = new_x;
+                robots[i].drivetrain.vel_x = 0.0f;
+            }
+            if (new_z != old_z) {
+                robots[i].drivetrain.pos_z = new_z;
+                robots[i].drivetrain.vel_z = 0.0f;
+            }
+        }
+
+        // Step 4: Sync drivetrain positions back to robot for rendering
+        for (auto& robot : robots) {
             robot.offset[0] = robot.drivetrain.pos_x;
             robot.offset[2] = robot.drivetrain.pos_z;
             robot.rotation_y = robot.drivetrain.heading;
@@ -1069,6 +1193,9 @@ int main(int argc, char** argv) {
 
         // Render floor
         floor_render(&floor, &view, &projection, camera_position(&camera));
+
+        // Render game objects
+        objects_render(&game_objects, &view, &projection, camera_position(&camera));
 
         // Render all parts
         Vec3 light_dir = vec3_normalize(vec3(0.5f, 1.0f, 0.3f));
@@ -1190,8 +1317,34 @@ int main(int argc, char** argv) {
                     // Draw robot origin axes
                     Vec3 origin = vec3(robots[i].offset[0], robots[i].ground_offset, robots[i].offset[2]);
                     debug_draw_axes(origin, 6.0f);  // 6 inch axes
+
+                    // Draw collision circle (as cylinder at ground level)
+                    Vec3 collision_center = vec3(robots[i].offset[0], 2.0f, robots[i].offset[2]);
+                    debug_draw_cylinder(collision_center, robots[i].collision_radius, 2.0f, vec3(1.0f, 1.0f, 0.0f));
                 }
             }
+
+            // Draw cylinder collision shapes
+            for (uint32_t i = 0; i < scene.cylinder_count; i++) {
+                const SceneCylinder* cyl = &scene.cylinders[i];
+                Vec3 cyl_center = vec3(cyl->x, cyl->height / 2.0f, cyl->z);
+                debug_draw_cylinder(cyl_center, cyl->radius, cyl->height / 2.0f, vec3(1.0f, 0.5f, 0.0f));
+            }
+
+            // Draw field boundary walls
+            Vec3 wall_color = vec3(0.8f, 0.8f, 0.0f);  // Yellow
+            float wall_h = WALL_HEIGHT / 2.0f;
+            float half_w = FIELD_WIDTH / 2.0f;
+            float half_d = FIELD_DEPTH / 2.0f;
+
+            // Left wall (min_x)
+            debug_draw_box(vec3(-half_w, wall_h, 0), vec3(0.5f, wall_h, half_d), wall_color);
+            // Right wall (max_x)
+            debug_draw_box(vec3(half_w, wall_h, 0), vec3(0.5f, wall_h, half_d), wall_color);
+            // Back wall (min_z)
+            debug_draw_box(vec3(0, wall_h, -half_d), vec3(half_w, wall_h, 0.5f), wall_color);
+            // Front wall (max_z)
+            debug_draw_box(vec3(0, wall_h, half_d), vec3(half_w, wall_h, 0.5f), wall_color);
 
             debug_end();
         }
@@ -1224,6 +1377,7 @@ int main(int argc, char** argv) {
     debug_destroy();
     gamepad_destroy(&gamepad);
     axis_gizmo_destroy(&axis_gizmo);
+    objects_destroy(&game_objects);
     floor_destroy(&floor);
     platform_shutdown(&platform);
 

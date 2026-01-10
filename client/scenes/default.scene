@@ -11,3 +11,11 @@ robot ClawbotIQ.mpd -20 0 0 0
 
 # Ike on the right side of the field, facing the opposite direction
 robot Ike.mpd 20 0 0 180
+
+# Cylinder obstacles: cylinder <x> <z> <radius> <height> <r> <g> <b>
+# 4" diameter = 2" radius, 7" tall
+
+cylinder -30 -20 2 7 0.9 0.2 0.2
+cylinder  30 -20 2 7 0.2 0.9 0.2
+cylinder -30  20 2 7 0.2 0.2 0.9
+cylinder  30  20 2 7 0.9 0.9 0.2

@@ -1,23 +1,25 @@
 /*
  * Drivetrain Physics Implementation
  *
- * Tank drive kinematics using the unicycle model.
+ * Force-based tank drive physics using wheel friction model.
  */
 
 #include "drivetrain.h"
+#include "physics_config.h"
 #include <math.h>
 #include <string.h>
 
-// Default VEX IQ drivetrain configuration
-static const DrivetrainConfig DEFAULT_CONFIG = {
-    .track_width = 10.0f,       // ~10 inches between wheels
-    .wheel_diameter = 4.0f,     // 4" standard wheels
-    .max_rpm = 120.0f,          // VEX IQ motor max RPM
-    .accel_rate = 0.0f,         // 0 = instant (no acceleration curve)
-};
-
 // Math constants
 #define PI 3.14159265358979323846f
+
+// Default VEX IQ drivetrain configuration
+static const DrivetrainConfig DEFAULT_CONFIG = {
+    .track_width = 10.0f,                      // ~10 inches between wheels
+    .wheel_diameter = VEXIQ_DEFAULT_WHEEL_DIAMETER,
+    .max_rpm = VEXIQ_MOTOR_MAX_RPM,
+    .robot_mass = VEXIQ_DEFAULT_ROBOT_MASS,
+    .moment_of_inertia = VEXIQ_DEFAULT_MOMENT_OF_INERTIA,
+};
 
 void drivetrain_init(Drivetrain* dt) {
     drivetrain_init_config(dt, &DEFAULT_CONFIG);
@@ -26,6 +28,7 @@ void drivetrain_init(Drivetrain* dt) {
 void drivetrain_init_config(Drivetrain* dt, const DrivetrainConfig* config) {
     memset(dt, 0, sizeof(Drivetrain));
     dt->config = *config;
+    dt->friction_coeff = 0.8f;  // Default, will be set from scene
 }
 
 float drivetrain_rpm_to_velocity(float rpm, float wheel_diameter) {
@@ -47,104 +50,215 @@ float drivetrain_percent_to_velocity(const Drivetrain* dt, float percent) {
 }
 
 void drivetrain_set_motors(Drivetrain* dt, float left_percent, float right_percent) {
-    dt->left_target = drivetrain_percent_to_velocity(dt, left_percent);
-    dt->right_target = drivetrain_percent_to_velocity(dt, right_percent);
-}
+    // Clamp to valid range
+    if (left_percent > 100.0f) left_percent = 100.0f;
+    if (left_percent < -100.0f) left_percent = -100.0f;
+    if (right_percent > 100.0f) right_percent = 100.0f;
+    if (right_percent < -100.0f) right_percent = -100.0f;
 
-void drivetrain_set_velocities(Drivetrain* dt, float left_vel, float right_vel) {
-    float max_velocity = drivetrain_rpm_to_velocity(dt->config.max_rpm, dt->config.wheel_diameter);
-
-    // Clamp to max velocity
-    if (left_vel > max_velocity) left_vel = max_velocity;
-    if (left_vel < -max_velocity) left_vel = -max_velocity;
-    if (right_vel > max_velocity) right_vel = max_velocity;
-    if (right_vel < -max_velocity) right_vel = -max_velocity;
-
-    dt->left_target = left_vel;
-    dt->right_target = right_vel;
+    dt->left_motor_pct = left_percent;
+    dt->right_motor_pct = right_percent;
 }
 
 void drivetrain_stop(Drivetrain* dt, int mode) {
-    dt->left_target = 0.0f;
-    dt->right_target = 0.0f;
+    dt->left_motor_pct = 0.0f;
+    dt->right_motor_pct = 0.0f;
 
     if (mode == 1) {
         // Brake: stop immediately
-        dt->left_velocity = 0.0f;
-        dt->right_velocity = 0.0f;
+        dt->vel_x = 0.0f;
+        dt->vel_z = 0.0f;
+        dt->angular_vel = 0.0f;
     }
-    // Coast: let acceleration curve bring to stop
+}
+
+void drivetrain_apply_force(Drivetrain* dt, float force_x, float force_z) {
+    dt->ext_force_x += force_x;
+    dt->ext_force_z += force_z;
+}
+
+void drivetrain_apply_torque(Drivetrain* dt, float torque) {
+    dt->ext_torque += torque;
+}
+
+void drivetrain_set_friction(Drivetrain* dt, float friction_coeff) {
+    dt->friction_coeff = friction_coeff;
 }
 
 void drivetrain_update(Drivetrain* dt, float dt_sec) {
-    // Apply acceleration (if configured)
-    if (dt->config.accel_rate > 0.0f) {
-        float max_delta = dt->config.accel_rate * dt_sec;
+    // =========================================================================
+    // Step 1: Calculate motor forces with torque curve
+    // =========================================================================
 
-        // Left motor
-        float left_diff = dt->left_target - dt->left_velocity;
-        if (fabsf(left_diff) <= max_delta) {
-            dt->left_velocity = dt->left_target;
-        } else {
-            dt->left_velocity += (left_diff > 0 ? max_delta : -max_delta);
-        }
+    // Real motors have a torque curve: torque decreases as speed increases
+    // At stall (0 RPM): full torque, at max RPM (no load): 0 torque
+    // available_torque = stall_torque * (1 - current_rpm / max_rpm)
 
-        // Right motor
-        float right_diff = dt->right_target - dt->right_velocity;
-        if (fabsf(right_diff) <= max_delta) {
-            dt->right_velocity = dt->right_target;
-        } else {
-            dt->right_velocity += (right_diff > 0 ? max_delta : -max_delta);
-        }
+    float wheel_radius = dt->config.wheel_diameter / 2.0f;
+    float wheel_circumference = PI * dt->config.wheel_diameter;
+
+    // Max wheel surface velocity at no-load RPM
+    float max_wheel_velocity = (dt->config.max_rpm / 60.0f) * wheel_circumference;
+
+    // Current wheel velocities (from last frame)
+    float left_wheel_speed = fabsf(dt->left_wheel_vel);
+    float right_wheel_speed = fabsf(dt->right_wheel_vel);
+
+    // Calculate available torque based on current speed (linear torque curve)
+    // Clamp speed ratio to [0, 1] to avoid negative torque
+    float left_speed_ratio = left_wheel_speed / max_wheel_velocity;
+    float right_speed_ratio = right_wheel_speed / max_wheel_velocity;
+    if (left_speed_ratio > 1.0f) left_speed_ratio = 1.0f;
+    if (right_speed_ratio > 1.0f) right_speed_ratio = 1.0f;
+
+    float left_available_torque = VEXIQ_MOTOR_STALL_TORQUE * (1.0f - left_speed_ratio);
+    float right_available_torque = VEXIQ_MOTOR_STALL_TORQUE * (1.0f - right_speed_ratio);
+
+    // Motor force = (percent/100) * available_force
+    float left_motor_force = (dt->left_motor_pct / 100.0f) * (left_available_torque / wheel_radius);
+    float right_motor_force = (dt->right_motor_pct / 100.0f) * (right_available_torque / wheel_radius);
+
+    // =========================================================================
+    // Step 2: Calculate friction limits
+    // =========================================================================
+
+    // Weight per side (assuming 4 wheels, 2 per side)
+    // Normal force = weight = mass * gravity (in lbf, mass already in lbs)
+    float weight = dt->config.robot_mass;  // lbf (weight = mass in imperial when using lbs)
+    float weight_per_side = weight / 2.0f;
+
+    // Maximum friction force per side
+    float max_friction = weight_per_side * dt->friction_coeff;
+
+    // =========================================================================
+    // Step 3: Apply friction limits (wheel slip)
+    // =========================================================================
+
+    float left_actual_force, right_actual_force;
+
+    if (fabsf(left_motor_force) > max_friction) {
+        // Left wheels slipping
+        left_actual_force = (left_motor_force > 0) ? max_friction : -max_friction;
+        dt->left_wheels_slipping = true;
     } else {
-        // Instant response (no acceleration)
-        dt->left_velocity = dt->left_target;
-        dt->right_velocity = dt->right_target;
+        left_actual_force = left_motor_force;
+        dt->left_wheels_slipping = false;
     }
 
-    // Compute linear and angular velocity (tank drive kinematics)
-    // Linear = average of wheel velocities
-    // Angular = difference / track width
-    dt->linear_velocity = (dt->left_velocity + dt->right_velocity) / 2.0f;
-    dt->angular_velocity = (dt->right_velocity - dt->left_velocity) / dt->config.track_width;
-
-    // Update pose using forward kinematics
-    // For small dt, use simple Euler integration
-    // For better accuracy, could use Runge-Kutta or exact arc integration
-
-    if (fabsf(dt->angular_velocity) < 0.0001f) {
-        // Nearly straight line - avoid division by zero
-        // Move in current heading direction
-        dt->pos_x += dt->linear_velocity * sinf(dt->heading) * dt_sec;
-        dt->pos_z += dt->linear_velocity * cosf(dt->heading) * dt_sec;
+    if (fabsf(right_motor_force) > max_friction) {
+        // Right wheels slipping
+        right_actual_force = (right_motor_force > 0) ? max_friction : -max_friction;
+        dt->right_wheels_slipping = true;
     } else {
-        // Arc motion - use exact integration
-        // Robot moves along an arc with radius R = linear_velocity / angular_velocity
-        float theta_old = dt->heading;
-        float theta_new = theta_old + dt->angular_velocity * dt_sec;
-
-        // Exact arc integration:
-        // dx = R * (sin(theta_new) - sin(theta_old))
-        // dz = R * (cos(theta_new) - cos(theta_old))
-        // But R = v / omega, so:
-        // dx = (v / omega) * (sin(theta_new) - sin(theta_old))
-        // dz = (v / omega) * (cos(theta_new) - cos(theta_old))
-
-        float R = dt->linear_velocity / dt->angular_velocity;
-        dt->pos_x += R * (sinf(theta_new) - sinf(theta_old));
-        dt->pos_z += R * (cosf(theta_new) - cosf(theta_old));
-        dt->heading = theta_new;
+        right_actual_force = right_motor_force;
+        dt->right_wheels_slipping = false;
     }
+
+    // =========================================================================
+    // Step 4: Calculate net forces in robot frame
+    // =========================================================================
+
+    // Forward force (both sides push forward)
+    float forward_force = left_actual_force + right_actual_force;
+
+    // Torque from differential drive
+    // Torque = (right - left) * (track_width / 2)
+    float track_half = dt->config.track_width / 2.0f;
+    float drive_torque = (right_actual_force - left_actual_force) * track_half;
+
+    // =========================================================================
+    // Step 5: Transform external forces to robot frame and add
+    // =========================================================================
+
+    // Transform world-frame external forces to robot frame
+    float cos_h = cosf(dt->heading);
+    float sin_h = sinf(dt->heading);
+
+    // External force in robot frame (forward = +Z in robot frame)
+    float ext_forward = dt->ext_force_z * cos_h + dt->ext_force_x * sin_h;
+    float ext_lateral = -dt->ext_force_z * sin_h + dt->ext_force_x * cos_h;
+
+    // Add external forces
+    forward_force += ext_forward;
+    float lateral_force = ext_lateral;  // Robot can be pushed sideways
+
+    // Add external torque
+    float total_torque = drive_torque + dt->ext_torque;
+
+    // Clear external forces for next frame
+    dt->ext_force_x = 0.0f;
+    dt->ext_force_z = 0.0f;
+    dt->ext_torque = 0.0f;
+
+    // =========================================================================
+    // Step 6: Calculate accelerations (F = ma)
+    // =========================================================================
+
+    // Convert mass to slugs for F=ma (lbs / 386.1)
+    float mass_slugs = dt->config.robot_mass / 386.1f;
+
+    // Linear accelerations in robot frame
+    float forward_accel = forward_force / mass_slugs;   // in/s²
+    float lateral_accel = lateral_force / mass_slugs;
+
+    // Angular acceleration (torque / moment of inertia)
+    float angular_accel = total_torque / dt->config.moment_of_inertia;  // rad/s²
+
+    // =========================================================================
+    // Step 7: Integrate velocities
+    // =========================================================================
+
+    // Current velocity in robot frame
+    float vel_forward = dt->vel_z * cos_h + dt->vel_x * sin_h;
+    float vel_lateral = -dt->vel_z * sin_h + dt->vel_x * cos_h;
+
+    // Update velocities
+    vel_forward += forward_accel * dt_sec;
+    vel_lateral += lateral_accel * dt_sec;
+    dt->angular_vel += angular_accel * dt_sec;
+
+    // Apply damping
+    vel_forward *= VEXIQ_LINEAR_DAMPING;
+    vel_lateral *= VEXIQ_LINEAR_DAMPING;
+    dt->angular_vel *= VEXIQ_ANGULAR_DAMPING;
+
+    // Transform back to world frame
+    dt->vel_x = vel_forward * sin_h + vel_lateral * cos_h;
+    dt->vel_z = vel_forward * cos_h - vel_lateral * sin_h;
+
+    // =========================================================================
+    // Step 8: Integrate position
+    // =========================================================================
+
+    dt->pos_x += dt->vel_x * dt_sec;
+    dt->pos_z += dt->vel_z * dt_sec;
+    dt->heading += dt->angular_vel * dt_sec;
 
     // Normalize heading to [-PI, PI]
     while (dt->heading > PI) dt->heading -= 2.0f * PI;
     while (dt->heading < -PI) dt->heading += 2.0f * PI;
+
+    // =========================================================================
+    // Step 9: Update derived values
+    // =========================================================================
+
+    // Linear velocity (forward speed)
+    dt->linear_velocity = vel_forward;
+
+    // Wheel surface velocities (for animation)
+    // In tank drive: wheel_vel = linear_vel ± (angular_vel * track_width/2)
+    dt->left_wheel_vel = vel_forward - dt->angular_vel * track_half;
+    dt->right_wheel_vel = vel_forward + dt->angular_vel * track_half;
 }
 
 void drivetrain_set_position(Drivetrain* dt, float x, float z, float heading) {
     dt->pos_x = x;
     dt->pos_z = z;
     dt->heading = heading;
+    // Reset velocities when teleporting
+    dt->vel_x = 0.0f;
+    dt->vel_z = 0.0f;
+    dt->angular_vel = 0.0f;
 }
 
 Vec3 drivetrain_get_position(const Drivetrain* dt) {
@@ -153,4 +267,12 @@ Vec3 drivetrain_get_position(const Drivetrain* dt) {
 
 float drivetrain_get_heading(const Drivetrain* dt) {
     return dt->heading;
+}
+
+Vec3 drivetrain_get_velocity(const Drivetrain* dt) {
+    return (Vec3){dt->vel_x, 0.0f, dt->vel_z};
+}
+
+bool drivetrain_is_slipping(const Drivetrain* dt) {
+    return dt->left_wheels_slipping || dt->right_wheels_slipping;
 }
