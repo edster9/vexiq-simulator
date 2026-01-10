@@ -972,6 +972,211 @@ static void run_hierarchical_collision_detection(
     }
 }
 
+// =============================================================================
+// Collision Response Functions
+// =============================================================================
+
+// Compute the world-space AABB that encloses all submodel OBBs for a robot
+static void get_robot_world_aabb(const RobotInstance* robot, AABB* out_aabb) {
+    float min_x = FLT_MAX, min_y = FLT_MAX, min_z = FLT_MAX;
+    float max_x = -FLT_MAX, max_y = -FLT_MAX, max_z = -FLT_MAX;
+
+    for (int sm = 0; sm < robot->submodel_count; sm++) {
+        OBB world_obb;
+        transform_obb_to_world(&robot->submodel_obbs[sm], robot, &world_obb);
+
+        // Get corners of this OBB and expand AABB
+        Vec3 corners[8];
+        obb_get_corners(&world_obb, corners);
+
+        for (int c = 0; c < 8; c++) {
+            if (corners[c].x < min_x) min_x = corners[c].x;
+            if (corners[c].y < min_y) min_y = corners[c].y;
+            if (corners[c].z < min_z) min_z = corners[c].z;
+            if (corners[c].x > max_x) max_x = corners[c].x;
+            if (corners[c].y > max_y) max_y = corners[c].y;
+            if (corners[c].z > max_z) max_z = corners[c].z;
+        }
+    }
+
+    out_aabb->min = vec3(min_x, min_y, min_z);
+    out_aabb->max = vec3(max_x, max_y, max_z);
+}
+
+// Apply wall collision response - push robot back inside field bounds
+static void apply_wall_collision_response(
+    RobotInstance* robot,
+    float field_half_width, float field_half_depth)
+{
+    AABB robot_aabb;
+    get_robot_world_aabb(robot, &robot_aabb);
+
+    float push_x = 0.0f, push_z = 0.0f;
+
+    // Left wall (min X)
+    if (robot_aabb.min.x < -field_half_width) {
+        push_x = -field_half_width - robot_aabb.min.x;
+    }
+    // Right wall (max X)
+    if (robot_aabb.max.x > field_half_width) {
+        push_x = field_half_width - robot_aabb.max.x;
+    }
+    // Back wall (min Z)
+    if (robot_aabb.min.z < -field_half_depth) {
+        push_z = -field_half_depth - robot_aabb.min.z;
+    }
+    // Front wall (max Z)
+    if (robot_aabb.max.z > field_half_depth) {
+        push_z = field_half_depth - robot_aabb.max.z;
+    }
+
+    // Apply correction
+    if (push_x != 0.0f || push_z != 0.0f) {
+        robot->drivetrain.pos_x += push_x;
+        robot->drivetrain.pos_z += push_z;
+        robot->offset[0] = robot->drivetrain.pos_x;
+        robot->offset[2] = robot->drivetrain.pos_z;
+
+        // Zero out velocity component into wall
+        if (push_x != 0.0f) robot->drivetrain.vel_x = 0.0f;
+        if (push_z != 0.0f) robot->drivetrain.vel_z = 0.0f;
+    }
+}
+
+// Apply robot-robot collision response - push robots apart
+static void apply_robot_collision_response(
+    RobotInstance* robot_a,
+    RobotInstance* robot_b)
+{
+    AABB aabb_a, aabb_b;
+    get_robot_world_aabb(robot_a, &aabb_a);
+    get_robot_world_aabb(robot_b, &aabb_b);
+
+    // Check for AABB overlap
+    bool overlap_x = aabb_a.max.x > aabb_b.min.x && aabb_a.min.x < aabb_b.max.x;
+    bool overlap_z = aabb_a.max.z > aabb_b.min.z && aabb_a.min.z < aabb_b.max.z;
+
+    if (!overlap_x || !overlap_z) return;  // No collision
+
+    // Calculate overlap amounts
+    float overlap_left = aabb_a.max.x - aabb_b.min.x;
+    float overlap_right = aabb_b.max.x - aabb_a.min.x;
+    float overlap_back = aabb_a.max.z - aabb_b.min.z;
+    float overlap_front = aabb_b.max.z - aabb_a.min.z;
+
+    // Find minimum penetration axis
+    float min_overlap_x = (overlap_left < overlap_right) ? overlap_left : overlap_right;
+    float min_overlap_z = (overlap_back < overlap_front) ? overlap_back : overlap_front;
+
+    float push_x = 0.0f, push_z = 0.0f;
+
+    if (min_overlap_x < min_overlap_z) {
+        // Push along X axis
+        push_x = (overlap_left < overlap_right) ? -overlap_left : overlap_right;
+    } else {
+        // Push along Z axis
+        push_z = (overlap_back < overlap_front) ? -overlap_back : overlap_front;
+    }
+
+    // Split the push between both robots (each moves half)
+    float half_push_x = push_x * 0.5f;
+    float half_push_z = push_z * 0.5f;
+
+    robot_a->drivetrain.pos_x += half_push_x;
+    robot_a->drivetrain.pos_z += half_push_z;
+    robot_a->offset[0] = robot_a->drivetrain.pos_x;
+    robot_a->offset[2] = robot_a->drivetrain.pos_z;
+
+    robot_b->drivetrain.pos_x -= half_push_x;
+    robot_b->drivetrain.pos_z -= half_push_z;
+    robot_b->offset[0] = robot_b->drivetrain.pos_x;
+    robot_b->offset[2] = robot_b->drivetrain.pos_z;
+
+    // Dampen velocities toward each other
+    if (push_x != 0.0f) {
+        robot_a->drivetrain.vel_x *= 0.5f;
+        robot_b->drivetrain.vel_x *= 0.5f;
+    }
+    if (push_z != 0.0f) {
+        robot_a->drivetrain.vel_z *= 0.5f;
+        robot_b->drivetrain.vel_z *= 0.5f;
+    }
+}
+
+// Apply cylinder collision response - push robot away from cylinder
+static void apply_cylinder_collision_response(
+    RobotInstance* robot,
+    const Scene* scene)
+{
+    AABB robot_aabb;
+    get_robot_world_aabb(robot, &robot_aabb);
+
+    // Robot center
+    float robot_cx = (robot_aabb.min.x + robot_aabb.max.x) * 0.5f;
+    float robot_cz = (robot_aabb.min.z + robot_aabb.max.z) * 0.5f;
+    float robot_rx = (robot_aabb.max.x - robot_aabb.min.x) * 0.5f;
+    float robot_rz = (robot_aabb.max.z - robot_aabb.min.z) * 0.5f;
+    float robot_radius = sqrtf(robot_rx * robot_rx + robot_rz * robot_rz);
+
+    for (uint32_t c = 0; c < scene->cylinder_count; c++) {
+        const SceneCylinder& cyl = scene->cylinders[c];
+
+        // Distance from robot center to cylinder center
+        float dx = robot_cx - cyl.x;
+        float dz = robot_cz - cyl.z;
+        float dist = sqrtf(dx * dx + dz * dz);
+
+        // Combined radius (cylinder + approximate robot radius)
+        float combined_radius = cyl.radius + robot_radius * 0.7f;  // 0.7 factor for tighter fit
+
+        if (dist < combined_radius && dist > 0.001f) {
+            // Penetration depth
+            float penetration = combined_radius - dist;
+
+            // Push direction (away from cylinder)
+            float nx = dx / dist;
+            float nz = dz / dist;
+
+            // Apply push
+            robot->drivetrain.pos_x += nx * penetration;
+            robot->drivetrain.pos_z += nz * penetration;
+            robot->offset[0] = robot->drivetrain.pos_x;
+            robot->offset[2] = robot->drivetrain.pos_z;
+
+            // Zero out velocity into cylinder
+            float vel_into = robot->drivetrain.vel_x * (-nx) + robot->drivetrain.vel_z * (-nz);
+            if (vel_into > 0) {
+                robot->drivetrain.vel_x += vel_into * nx;
+                robot->drivetrain.vel_z += vel_into * nz;
+            }
+        }
+    }
+}
+
+// Run all collision responses
+static void run_collision_response(
+    std::vector<RobotInstance>& robots,
+    const Scene* scene,
+    float field_half_width, float field_half_depth)
+{
+    // Robot-robot collision response
+    for (size_t i = 0; i < robots.size(); i++) {
+        for (size_t j = i + 1; j < robots.size(); j++) {
+            apply_robot_collision_response(&robots[i], &robots[j]);
+        }
+    }
+
+    // Robot-wall collision response
+    for (auto& robot : robots) {
+        apply_wall_collision_response(&robot, field_half_width, field_half_depth);
+    }
+
+    // Robot-cylinder collision response
+    for (auto& robot : robots) {
+        apply_cylinder_collision_response(&robot, scene);
+    }
+}
+
 int main(int argc, char** argv) {
     printf("VEX IQ Simulator - C++ Client\n");
     printf("=============================\n\n");
@@ -1447,21 +1652,21 @@ int main(int argc, char** argv) {
 
         // =====================================================================
         // Physics update order:
-        // 1. Update drivetrain physics (motor forces only - circle collider disabled)
-        // 2. Sync positions for rendering
-        // 3. Run hierarchical OBB collision detection (detection only, no physics)
+        // 1. Update drivetrain physics (motor forces)
+        // 2. Apply OBB-based collision response
+        // 3. Sync positions for rendering
+        // 4. Run hierarchical OBB collision detection (for debug visualization)
         // =====================================================================
 
-        // Update drivetrain physics (motor forces only)
+        // Step 1: Update drivetrain physics
         for (auto& robot : robots) {
             drivetrain_update(&robot.drivetrain, dt);
         }
 
-        // NOTE: Circle collider disabled for OBB testing
-        // Robots can now pass through each other and walls
-        // TODO: Re-enable or replace with OBB-based collision response
+        // Step 2: Apply collision response (walls, robots, cylinders)
+        run_collision_response(robots, &scene, FIELD_WIDTH / 2.0f, FIELD_DEPTH / 2.0f);
 
-        // Step 4: Sync drivetrain positions back to robot for rendering
+        // Step 3: Sync drivetrain positions back to robot for rendering
         for (auto& robot : robots) {
             robot.offset[0] = robot.drivetrain.pos_x;
             robot.offset[2] = robot.drivetrain.pos_z;
@@ -1503,7 +1708,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // Step 5: Hierarchical collision detection (for debug visualization only)
+        // Step 4: Hierarchical collision detection (for debug visualization)
         // This detects which parts are colliding but doesn't affect physics yet
         if (show_bounding_boxes) {
             run_hierarchical_collision_detection(robots, parts, &scene,
