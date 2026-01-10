@@ -404,44 +404,18 @@ static Mat4 build_ldraw_model_matrix(const float* pos, const float* rot, const R
     float pz = pos[2];
 
     // Apply wheel spin rotation if present (before robot rotation)
+    // Only rotate the orientation matrix - wheels spin in place, position doesn't change
     if (wheel && wheel->spin_angle != 0.0f) {
-        // Wheel center in LDU
-        float cx = wheel->world_position[0];
-        float cy = wheel->world_position[1];
-        float cz = wheel->world_position[2];
-
         // Rotation axis (already normalized)
         float ax = wheel->spin_axis[0];
         float ay = wheel->spin_axis[1];
         float az = wheel->spin_axis[2];
 
-        // Rodrigues' rotation formula for position
-        float rel_x = px - cx;
-        float rel_y = py - cy;
-        float rel_z = pz - cz;
-
         float cos_a = cosf(wheel->spin_angle);
         float sin_a = sinf(wheel->spin_angle);
         float one_minus_cos = 1.0f - cos_a;
 
-        // Cross product: axis x rel
-        float cross_x = ay * rel_z - az * rel_y;
-        float cross_y = az * rel_x - ax * rel_z;
-        float cross_z = ax * rel_y - ay * rel_x;
-
-        // Dot product: axis . rel
-        float dot = ax * rel_x + ay * rel_y + az * rel_z;
-
-        // Rotated position: rel*cos + (axis x rel)*sin + axis*(axis.rel)*(1-cos)
-        float rx = rel_x * cos_a + cross_x * sin_a + ax * dot * one_minus_cos;
-        float ry = rel_y * cos_a + cross_y * sin_a + ay * dot * one_minus_cos;
-        float rz = rel_z * cos_a + cross_z * sin_a + az * dot * one_minus_cos;
-
-        px = rx + cx;
-        py = ry + cy;
-        pz = rz + cz;
-
-        // Also rotate the orientation matrix using Rodrigues' formula
+        // Rotate the orientation matrix using Rodrigues' formula
         // For each column of the rotation matrix, rotate it around the axis
         // Column 0 (a, d, g)
         float c0_cross_x = ay * g - az * d;
