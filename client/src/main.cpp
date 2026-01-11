@@ -1272,27 +1272,19 @@ static void apply_cylinder_collision_response(
             // Get robot velocity toward cylinder
             float robot_vel_into = robot->drivetrain.vel_x * (-contact_nx) + robot->drivetrain.vel_z * (-contact_nz);
 
-            // Mass ratio for momentum transfer
-            float robot_mass = robot->drivetrain.config.robot_mass;
-            float mass_ratio = robot_mass / (robot_mass + cyl.mass);
-
             // Transfer velocity to cylinder (push it away)
-            // Cylinder gets most of the push since it's light
             if (robot_vel_into > 0) {
-                // Push cylinder away with robot's velocity
-                cyl.vel_x -= contact_nx * robot_vel_into * mass_ratio * 1.5f;
-                cyl.vel_z -= contact_nz * robot_vel_into * mass_ratio * 1.5f;
-
-                // Robot loses some velocity (but not much since cylinder is light)
-                float robot_slowdown = robot_vel_into * (1.0f - mass_ratio) * 0.3f;
-                robot->drivetrain.vel_x += robot_slowdown * contact_nx;
-                robot->drivetrain.vel_z += robot_slowdown * contact_nz;
+                // Match cylinder velocity to robot's (smooth push, no bounce)
+                cyl.vel_x = -contact_nx * robot_vel_into * 0.8f;
+                cyl.vel_z = -contact_nz * robot_vel_into * 0.8f;
             }
 
-            // Separate them - push cylinder out of robot
-            float correction = max_penetration + 0.1f;  // Push a bit extra
-            cyl.x -= contact_nx * correction;
-            cyl.z -= contact_nz * correction;
+            // Position correction with tolerance
+            if (max_penetration > COLLISION_TOLERANCE) {
+                float correction = max_penetration - COLLISION_TOLERANCE;
+                cyl.x -= contact_nx * correction;
+                cyl.z -= contact_nz * correction;
+            }
         }
     }
 }
@@ -1300,7 +1292,8 @@ static void apply_cylinder_collision_response(
 // Update cylinder physics (friction, position integration, cylinder-cylinder collision)
 static void update_cylinder_physics(Scene* scene, float dt_sec, float field_half_width, float field_half_depth) {
     const float CYLINDER_FRICTION = 0.85f;  // Friction damping per frame
-    const float WALL_BOUNCE = 0.3f;         // Bounce factor off walls (plastic cups don't bounce much)
+    const float WALL_BOUNCE = 0.0f;         // No bounce off walls (soft stop)
+    const float CYLINDER_TOLERANCE = 0.1f;  // Allow slight overlap before correcting
 
     // Cylinder-cylinder collision
     for (uint32_t i = 0; i < scene->cylinder_count; i++) {
@@ -1314,29 +1307,30 @@ static void update_cylinder_physics(Scene* scene, float dt_sec, float field_half
             float min_dist = a.radius + b.radius;
 
             if (dist < min_dist && dist > 0.001f) {
-                // Normalize direction
+                float overlap = min_dist - dist;
                 float nx = dx / dist;
                 float nz = dz / dist;
-
-                // Separate them
-                float overlap = min_dist - dist;
                 float total_mass = a.mass + b.mass;
                 float a_ratio = b.mass / total_mass;
                 float b_ratio = a.mass / total_mass;
 
-                a.x -= nx * overlap * a_ratio;
-                a.z -= nz * overlap * a_ratio;
-                b.x += nx * overlap * b_ratio;
-                b.z += nz * overlap * b_ratio;
-
-                // Exchange momentum along collision normal
+                // Always cancel approaching velocity immediately (prevents bounce buildup)
                 float rel_vel = (b.vel_x - a.vel_x) * nx + (b.vel_z - a.vel_z) * nz;
-                if (rel_vel < 0) {  // Moving toward each other
-                    float impulse = rel_vel * 0.8f;  // Slight energy loss
-                    a.vel_x += impulse * nx * a_ratio;
-                    a.vel_z += impulse * nz * a_ratio;
-                    b.vel_x -= impulse * nx * b_ratio;
-                    b.vel_z -= impulse * nz * b_ratio;
+                if (rel_vel < 0) {
+                    // Cancel relative velocity completely - no bounce
+                    a.vel_x += rel_vel * nx * a_ratio;
+                    a.vel_z += rel_vel * nz * a_ratio;
+                    b.vel_x -= rel_vel * nx * b_ratio;
+                    b.vel_z -= rel_vel * nz * b_ratio;
+                }
+
+                // Position correction only if exceeds tolerance
+                if (overlap > CYLINDER_TOLERANCE) {
+                    float correction = overlap - CYLINDER_TOLERANCE;
+                    a.x -= nx * correction * a_ratio;
+                    a.z -= nz * correction * a_ratio;
+                    b.x += nx * correction * b_ratio;
+                    b.z += nz * correction * b_ratio;
                 }
             }
         }
