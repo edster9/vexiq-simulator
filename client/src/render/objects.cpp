@@ -211,6 +211,13 @@ void objects_clear(GameObjects* objs) {
     }
 }
 
+void objects_update_cylinder(GameObjects* objs, int index, float x, float z) {
+    if (index >= 0 && index < objs->count && objs->objects[index].active) {
+        objs->objects[index].x = x;
+        objs->objects[index].z = z;
+    }
+}
+
 void objects_render(GameObjects* objs, Mat4* view, Mat4* projection, Vec3 camera_pos) {
     if (objs->count == 0) return;
 

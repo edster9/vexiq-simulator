@@ -37,12 +37,15 @@ typedef struct {
     float rotation_y;                // Rotation around Y axis (degrees)
 } SceneRobot;
 
-// Cylinder object in scene
+// Cylinder object in scene (movable physics object)
 typedef struct {
     float x, z;           // Position on field (inches)
     float radius;         // Radius (inches)
     float height;         // Height (inches)
     float r, g, b;        // Color (0-1)
+    // Physics state (for movable cylinders)
+    float vel_x, vel_z;   // Velocity (inches/s)
+    float mass;           // Mass in pounds (light plastic cup ~0.1 lbs)
 } SceneCylinder;
 
 // Scene-level physics parameters

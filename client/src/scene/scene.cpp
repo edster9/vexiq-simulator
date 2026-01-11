@@ -98,6 +98,10 @@ bool scene_load(const char* path, Scene* scene) {
                                &cyl->r, &cyl->g, &cyl->b);
 
             if (parsed == 7) {
+                // Initialize physics state
+                cyl->vel_x = 0.0f;
+                cyl->vel_z = 0.0f;
+                cyl->mass = 0.1f;  // Light plastic cup (~0.1 lbs)
                 scene->cylinder_count++;
             } else {
                 fprintf(stderr, "[Scene] Warning: Invalid cylinder line %d: %s\n", line_num, trimmed);

@@ -227,6 +227,21 @@ void drivetrain_update(Drivetrain* dt, float dt_sec) {
     dt->vel_z = vel_forward * cos_h - vel_lateral * sin_h;
 
     // =========================================================================
+    // Step 7b: Apply contact constraint (prevent velocity into obstacles)
+    // =========================================================================
+    if (dt->in_contact) {
+        // Check if velocity is going into the contact
+        float vel_into_contact = dt->vel_x * (-dt->contact_nx) + dt->vel_z * (-dt->contact_nz);
+        if (vel_into_contact > 0) {
+            // Remove velocity component going into contact
+            dt->vel_x += vel_into_contact * dt->contact_nx;
+            dt->vel_z += vel_into_contact * dt->contact_nz;
+        }
+        // Clear contact for next frame (collision will re-set if still in contact)
+        dt->in_contact = false;
+    }
+
+    // =========================================================================
     // Step 8: Integrate position
     // =========================================================================
 

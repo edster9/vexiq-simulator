@@ -976,8 +976,9 @@ static void run_hierarchical_collision_detection(
 // Collision Response Functions (Hierarchical: submodel broad-phase, part narrow-phase)
 // =============================================================================
 
-// Collision skin distance - small buffer to prevent tunneling
-static const float COLLISION_SKIN = 0.05f;  // 0.05 inches
+// Collision dead zone - only correct if penetration exceeds this threshold
+// This breaks the feedback loop that causes jitter
+static const float COLLISION_TOLERANCE = 0.15f;  // 0.15 inches - acceptable penetration
 
 // Apply wall collision response using hierarchical detection
 // Broad phase: submodel OBBs, Narrow phase: part OBBs
@@ -1036,14 +1037,19 @@ static void apply_wall_collision_response(
                 obb_get_enclosing_aabb(&world_part_obb, &part_aabb);
 
                 float push_x = 0.0f, push_z = 0.0f;
+                float penetration = 0.0f;
                 if (w == 0 && part_aabb.min.x < -field_half_width) {  // Left
-                    push_x = -field_half_width - part_aabb.min.x + COLLISION_SKIN;
+                    penetration = -field_half_width - part_aabb.min.x;
+                    if (penetration > COLLISION_TOLERANCE) push_x = penetration - COLLISION_TOLERANCE;
                 } else if (w == 1 && part_aabb.max.x > field_half_width) {  // Right
-                    push_x = field_half_width - part_aabb.max.x - COLLISION_SKIN;
+                    penetration = part_aabb.max.x - field_half_width;
+                    if (penetration > COLLISION_TOLERANCE) push_x = -(penetration - COLLISION_TOLERANCE);
                 } else if (w == 2 && part_aabb.min.z < -field_half_depth) {  // Back
-                    push_z = -field_half_depth - part_aabb.min.z + COLLISION_SKIN;
+                    penetration = -field_half_depth - part_aabb.min.z;
+                    if (penetration > COLLISION_TOLERANCE) push_z = penetration - COLLISION_TOLERANCE;
                 } else if (w == 3 && part_aabb.max.z > field_half_depth) {  // Front
-                    push_z = field_half_depth - part_aabb.max.z - COLLISION_SKIN;
+                    penetration = part_aabb.max.z - field_half_depth;
+                    if (penetration > COLLISION_TOLERANCE) push_z = -(penetration - COLLISION_TOLERANCE);
                 }
 
                 // Track maximum penetration
@@ -1067,9 +1073,14 @@ static void apply_wall_collision_response(
         if (max_push_z != 0.0f) {
             robot->drivetrain.vel_z = 0.0f;
         }
-        // Light damping to smooth contact
-        robot->drivetrain.vel_x *= 0.9f;
-        robot->drivetrain.vel_z *= 0.9f;
+
+        // Set contact constraint for next physics update
+        float push_len = sqrtf(max_push_x * max_push_x + max_push_z * max_push_z);
+        if (push_len > 0.001f) {
+            robot->drivetrain.in_contact = true;
+            robot->drivetrain.contact_nx = max_push_x / push_len;
+            robot->drivetrain.contact_nz = max_push_z / push_len;
+        }
     }
 }
 
@@ -1079,10 +1090,13 @@ static void apply_robot_collision_response(
     RobotInstance* robot_b,
     std::vector<PartInstance>& parts)
 {
+    (void)parts;  // No longer used - submodel-level collision only for performance
+
     float total_push_x = 0.0f, total_push_z = 0.0f;
     int collision_count = 0;
 
-    // For each submodel pair (broad phase)
+    // Submodel-level collision only (no part drilling for performance)
+    // This is O(s1 * s2) instead of O(s1 * s2 * p1 * p2) when parts are checked
     for (int sm_a = 0; sm_a < robot_a->submodel_count; sm_a++) {
         OBB world_sm_a;
         transform_obb_to_world(&robot_a->submodel_obbs[sm_a], robot_a, &world_sm_a);
@@ -1091,74 +1105,39 @@ static void apply_robot_collision_response(
             OBB world_sm_b;
             transform_obb_to_world(&robot_b->submodel_obbs[sm_b], robot_b, &world_sm_b);
 
-            // Broad phase: do submodel OBBs intersect?
+            // Do submodel OBBs intersect?
             if (!obb_intersects_obb(&world_sm_a, &world_sm_b)) continue;
 
             // Mark submodels as colliding (for visualization)
-            if (robot_a->submodel_collision_state[sm_a] < COLLISION_SUBMODEL) {
-                robot_a->submodel_collision_state[sm_a] = COLLISION_SUBMODEL;
-            }
-            if (robot_b->submodel_collision_state[sm_b] < COLLISION_SUBMODEL) {
-                robot_b->submodel_collision_state[sm_b] = COLLISION_SUBMODEL;
-            }
+            robot_a->submodel_collision_state[sm_a] = COLLISION_SUBMODEL;
+            robot_b->submodel_collision_state[sm_b] = COLLISION_SUBMODEL;
 
-            // Narrow phase: check part-part collisions
-            int start_a = robot_a->submodel_part_start[sm_a];
-            int count_a = robot_a->submodel_part_count[sm_a];
-            int start_b = robot_b->submodel_part_start[sm_b];
-            int count_b = robot_b->submodel_part_count[sm_b];
+            // Use submodel AABBs for collision response (fast approximation)
+            AABB aabb_a, aabb_b;
+            obb_get_enclosing_aabb(&world_sm_a, &aabb_a);
+            obb_get_enclosing_aabb(&world_sm_b, &aabb_b);
 
-            for (int pa = 0; pa < count_a; pa++) {
-                size_t idx_a = robot_a->parts_start_index + start_a + pa;
-                if (idx_a >= parts.size()) continue;
-                PartInstance& part_a = parts[idx_a];
-                if (!part_a.mesh) continue;
+            // Calculate overlap
+            float overlap_x = fminf(aabb_a.max.x, aabb_b.max.x) - fmaxf(aabb_a.min.x, aabb_b.min.x);
+            float overlap_z = fminf(aabb_a.max.z, aabb_b.max.z) - fmaxf(aabb_a.min.z, aabb_b.min.z);
 
-                OBB world_part_a;
-                transform_obb_to_world(&part_a.local_obb, robot_a, &world_part_a);
+            if (overlap_x > 0 && overlap_z > 0) {
+                // Push along axis of minimum penetration
+                float center_a_x = (aabb_a.min.x + aabb_a.max.x) * 0.5f;
+                float center_a_z = (aabb_a.min.z + aabb_a.max.z) * 0.5f;
+                float center_b_x = (aabb_b.min.x + aabb_b.max.x) * 0.5f;
+                float center_b_z = (aabb_b.min.z + aabb_b.max.z) * 0.5f;
 
-                for (int pb = 0; pb < count_b; pb++) {
-                    size_t idx_b = robot_b->parts_start_index + start_b + pb;
-                    if (idx_b >= parts.size()) continue;
-                    PartInstance& part_b = parts[idx_b];
-                    if (!part_b.mesh) continue;
-
-                    OBB world_part_b;
-                    transform_obb_to_world(&part_b.local_obb, robot_b, &world_part_b);
-
-                    if (!obb_intersects_obb(&world_part_a, &world_part_b)) continue;
-
-                    // Mark parts as colliding (for visualization)
-                    part_a.collision_state = COLLISION_PART;
-                    part_b.collision_state = COLLISION_PART;
-
-                    // Parts actually collide - calculate push from centers
-                    AABB aabb_a, aabb_b;
-                    obb_get_enclosing_aabb(&world_part_a, &aabb_a);
-                    obb_get_enclosing_aabb(&world_part_b, &aabb_b);
-
-                    // Calculate overlap
-                    float overlap_x = fminf(aabb_a.max.x, aabb_b.max.x) - fmaxf(aabb_a.min.x, aabb_b.min.x);
-                    float overlap_z = fminf(aabb_a.max.z, aabb_b.max.z) - fmaxf(aabb_a.min.z, aabb_b.min.z);
-
-                    if (overlap_x > 0 && overlap_z > 0) {
-                        // Push along axis of minimum penetration (plus skin)
-                        float center_a_x = (aabb_a.min.x + aabb_a.max.x) * 0.5f;
-                        float center_a_z = (aabb_a.min.z + aabb_a.max.z) * 0.5f;
-                        float center_b_x = (aabb_b.min.x + aabb_b.max.x) * 0.5f;
-                        float center_b_z = (aabb_b.min.z + aabb_b.max.z) * 0.5f;
-
-                        if (overlap_x < overlap_z) {
-                            // Push along X
-                            float push = overlap_x + COLLISION_SKIN;
-                            total_push_x += (center_a_x < center_b_x) ? -push : push;
-                        } else {
-                            // Push along Z
-                            float push = overlap_z + COLLISION_SKIN;
-                            total_push_z += (center_a_z < center_b_z) ? -push : push;
-                        }
-                        collision_count++;
+                float penetration = fminf(overlap_x, overlap_z);
+                // Only correct if penetration exceeds tolerance
+                if (penetration > COLLISION_TOLERANCE) {
+                    float push = penetration - COLLISION_TOLERANCE;
+                    if (overlap_x < overlap_z) {
+                        total_push_x += (center_a_x < center_b_x) ? -push : push;
+                    } else {
+                        total_push_z += (center_a_z < center_b_z) ? -push : push;
                     }
+                    collision_count++;
                 }
             }
         }
@@ -1199,26 +1178,30 @@ static void apply_robot_collision_response(
                 robot_b->drivetrain.vel_z -= vel_into_b * (-nz);
             }
 
-            // Light damping to smooth contact
-            robot_a->drivetrain.vel_x *= 0.9f;
-            robot_a->drivetrain.vel_z *= 0.9f;
-            robot_b->drivetrain.vel_x *= 0.9f;
-            robot_b->drivetrain.vel_z *= 0.9f;
+            // Set contact constraints for next physics update
+            robot_a->drivetrain.in_contact = true;
+            robot_a->drivetrain.contact_nx = nx;
+            robot_a->drivetrain.contact_nz = nz;
+            robot_b->drivetrain.in_contact = true;
+            robot_b->drivetrain.contact_nx = -nx;
+            robot_b->drivetrain.contact_nz = -nz;
         }
     }
 }
 
 // Apply cylinder collision response using hierarchical detection
+// Cylinders are light movable objects that get pushed by the robot
 static void apply_cylinder_collision_response(
     RobotInstance* robot,
     std::vector<PartInstance>& parts,
-    const Scene* scene)
+    Scene* scene)  // Non-const to modify cylinder positions
 {
     for (uint32_t c = 0; c < scene->cylinder_count; c++) {
-        const SceneCylinder& cyl = scene->cylinders[c];
+        SceneCylinder& cyl = scene->cylinders[c];
 
         float max_penetration = 0.0f;
-        float push_nx = 0.0f, push_nz = 0.0f;
+        float contact_nx = 0.0f, contact_nz = 0.0f;
+        bool any_contact = false;
 
         // For each submodel (broad phase)
         for (int sm = 0; sm < robot->submodel_count; sm++) {
@@ -1267,59 +1250,164 @@ static void apply_cylinder_collision_response(
 
                 float combined_radius = cyl.radius + part_radius;
                 if (dist < combined_radius && dist > 0.001f) {
-                    // Add skin distance to prevent jitter
-                    float penetration = combined_radius - dist + COLLISION_SKIN;
+                    float penetration = combined_radius - dist;
+
+                    // Track contact direction (from cylinder toward robot)
+                    if (!any_contact || penetration > max_penetration) {
+                        contact_nx = dx / dist;  // Points from cylinder to robot
+                        contact_nz = dz / dist;
+                    }
+                    any_contact = true;
+
+                    // Track max penetration
                     if (penetration > max_penetration) {
                         max_penetration = penetration;
-                        push_nx = dx / dist;
-                        push_nz = dz / dist;
                     }
                 }
             }
         }
 
-        // Apply push for this cylinder
-        if (max_penetration > 0.0f) {
-            robot->drivetrain.pos_x += push_nx * max_penetration;
-            robot->drivetrain.pos_z += push_nz * max_penetration;
-            robot->offset[0] = robot->drivetrain.pos_x;
-            robot->offset[2] = robot->drivetrain.pos_z;
+        // If contact, transfer momentum to cylinder (push it away)
+        if (any_contact && max_penetration > 0.01f) {
+            // Get robot velocity toward cylinder
+            float robot_vel_into = robot->drivetrain.vel_x * (-contact_nx) + robot->drivetrain.vel_z * (-contact_nz);
 
-            // Remove velocity component going into the cylinder (keep tangential)
-            float vel_into = robot->drivetrain.vel_x * (-push_nx) + robot->drivetrain.vel_z * (-push_nz);
-            if (vel_into > 0) {
-                robot->drivetrain.vel_x += vel_into * push_nx;
-                robot->drivetrain.vel_z += vel_into * push_nz;
+            // Mass ratio for momentum transfer
+            float robot_mass = robot->drivetrain.config.robot_mass;
+            float mass_ratio = robot_mass / (robot_mass + cyl.mass);
+
+            // Transfer velocity to cylinder (push it away)
+            // Cylinder gets most of the push since it's light
+            if (robot_vel_into > 0) {
+                // Push cylinder away with robot's velocity
+                cyl.vel_x -= contact_nx * robot_vel_into * mass_ratio * 1.5f;
+                cyl.vel_z -= contact_nz * robot_vel_into * mass_ratio * 1.5f;
+
+                // Robot loses some velocity (but not much since cylinder is light)
+                float robot_slowdown = robot_vel_into * (1.0f - mass_ratio) * 0.3f;
+                robot->drivetrain.vel_x += robot_slowdown * contact_nx;
+                robot->drivetrain.vel_z += robot_slowdown * contact_nz;
             }
-            // Light damping to smooth contact
-            robot->drivetrain.vel_x *= 0.9f;
-            robot->drivetrain.vel_z *= 0.9f;
+
+            // Separate them - push cylinder out of robot
+            float correction = max_penetration + 0.1f;  // Push a bit extra
+            cyl.x -= contact_nx * correction;
+            cyl.z -= contact_nz * correction;
+        }
+    }
+}
+
+// Update cylinder physics (friction, position integration, cylinder-cylinder collision)
+static void update_cylinder_physics(Scene* scene, float dt_sec, float field_half_width, float field_half_depth) {
+    const float CYLINDER_FRICTION = 0.85f;  // Friction damping per frame
+    const float WALL_BOUNCE = 0.3f;         // Bounce factor off walls (plastic cups don't bounce much)
+
+    // Cylinder-cylinder collision
+    for (uint32_t i = 0; i < scene->cylinder_count; i++) {
+        for (uint32_t j = i + 1; j < scene->cylinder_count; j++) {
+            SceneCylinder& a = scene->cylinders[i];
+            SceneCylinder& b = scene->cylinders[j];
+
+            float dx = b.x - a.x;
+            float dz = b.z - a.z;
+            float dist = sqrtf(dx * dx + dz * dz);
+            float min_dist = a.radius + b.radius;
+
+            if (dist < min_dist && dist > 0.001f) {
+                // Normalize direction
+                float nx = dx / dist;
+                float nz = dz / dist;
+
+                // Separate them
+                float overlap = min_dist - dist;
+                float total_mass = a.mass + b.mass;
+                float a_ratio = b.mass / total_mass;
+                float b_ratio = a.mass / total_mass;
+
+                a.x -= nx * overlap * a_ratio;
+                a.z -= nz * overlap * a_ratio;
+                b.x += nx * overlap * b_ratio;
+                b.z += nz * overlap * b_ratio;
+
+                // Exchange momentum along collision normal
+                float rel_vel = (b.vel_x - a.vel_x) * nx + (b.vel_z - a.vel_z) * nz;
+                if (rel_vel < 0) {  // Moving toward each other
+                    float impulse = rel_vel * 0.8f;  // Slight energy loss
+                    a.vel_x += impulse * nx * a_ratio;
+                    a.vel_z += impulse * nz * a_ratio;
+                    b.vel_x -= impulse * nx * b_ratio;
+                    b.vel_z -= impulse * nz * b_ratio;
+                }
+            }
+        }
+    }
+
+    // Apply friction and integrate position
+    for (uint32_t c = 0; c < scene->cylinder_count; c++) {
+        SceneCylinder& cyl = scene->cylinders[c];
+
+        // Apply friction (damping)
+        cyl.vel_x *= CYLINDER_FRICTION;
+        cyl.vel_z *= CYLINDER_FRICTION;
+
+        // Stop if very slow
+        if (fabsf(cyl.vel_x) < 0.1f) cyl.vel_x = 0.0f;
+        if (fabsf(cyl.vel_z) < 0.1f) cyl.vel_z = 0.0f;
+
+        // Integrate position
+        cyl.x += cyl.vel_x * dt_sec;
+        cyl.z += cyl.vel_z * dt_sec;
+
+        // Cylinder-wall collision with bounce
+        float bound_x = field_half_width - cyl.radius;
+        float bound_z = field_half_depth - cyl.radius;
+
+        if (cyl.x < -bound_x) {
+            cyl.x = -bound_x;
+            cyl.vel_x = -cyl.vel_x * WALL_BOUNCE;
+        } else if (cyl.x > bound_x) {
+            cyl.x = bound_x;
+            cyl.vel_x = -cyl.vel_x * WALL_BOUNCE;
+        }
+
+        if (cyl.z < -bound_z) {
+            cyl.z = -bound_z;
+            cyl.vel_z = -cyl.vel_z * WALL_BOUNCE;
+        } else if (cyl.z > bound_z) {
+            cyl.z = bound_z;
+            cyl.vel_z = -cyl.vel_z * WALL_BOUNCE;
         }
     }
 }
 
 // Run all collision responses (hierarchical: submodel broad-phase, part narrow-phase)
+// Uses sub-stepping to resolve collisions iteratively and prevent jitter
 static void run_collision_response(
     std::vector<RobotInstance>& robots,
     std::vector<PartInstance>& parts,
-    const Scene* scene,
+    Scene* scene,  // Non-const to allow cylinder movement
     float field_half_width, float field_half_depth)
 {
-    // Robot-robot collision response
-    for (size_t i = 0; i < robots.size(); i++) {
-        for (size_t j = i + 1; j < robots.size(); j++) {
-            apply_robot_collision_response(&robots[i], &robots[j], parts);
+    // Sub-stepping: run collision response multiple times to converge to stable state
+    const int MAX_ITERATIONS = 4;
+
+    for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+        // Robot-robot collision response
+        for (size_t i = 0; i < robots.size(); i++) {
+            for (size_t j = i + 1; j < robots.size(); j++) {
+                apply_robot_collision_response(&robots[i], &robots[j], parts);
+            }
         }
-    }
 
-    // Robot-wall collision response
-    for (auto& robot : robots) {
-        apply_wall_collision_response(&robot, parts, field_half_width, field_half_depth);
-    }
+        // Robot-wall collision response
+        for (auto& robot : robots) {
+            apply_wall_collision_response(&robot, parts, field_half_width, field_half_depth);
+        }
 
-    // Robot-cylinder collision response
-    for (auto& robot : robots) {
-        apply_cylinder_collision_response(&robot, parts, scene);
+        // Robot-cylinder collision response
+        for (auto& robot : robots) {
+            apply_cylinder_collision_response(&robot, parts, scene);
+        }
     }
 }
 
@@ -1811,6 +1899,14 @@ int main(int argc, char** argv) {
 
         // Step 2: Apply collision response (walls, robots, cylinders)
         run_collision_response(robots, parts, &scene, FIELD_WIDTH / 2.0f, FIELD_DEPTH / 2.0f);
+
+        // Step 2b: Update cylinder physics (friction, position)
+        update_cylinder_physics(&scene, dt, FIELD_WIDTH / 2.0f, FIELD_DEPTH / 2.0f);
+
+        // Step 2c: Sync cylinder positions to rendering objects
+        for (uint32_t i = 0; i < scene.cylinder_count; i++) {
+            objects_update_cylinder(&game_objects, i, scene.cylinders[i].x, scene.cylinders[i].z);
+        }
 
         // Step 3: Sync drivetrain positions back to robot for rendering
         for (auto& robot : robots) {

@@ -47,6 +47,9 @@ int objects_add_cylinder(GameObjects* objs, float x, float z, float radius, floa
 // Clear all objects
 void objects_clear(GameObjects* objs);
 
+// Update cylinder position (for movable objects)
+void objects_update_cylinder(GameObjects* objs, int index, float x, float z);
+
 // Render all objects
 void objects_render(GameObjects* objs, Mat4* view, Mat4* projection, Vec3 camera_pos);
 

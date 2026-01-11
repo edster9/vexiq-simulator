@@ -71,6 +71,11 @@ typedef struct {
     float linear_velocity;  // Forward speed (inches/s)
     float left_wheel_vel;   // Left wheel surface velocity (inches/s)
     float right_wheel_vel;  // Right wheel surface velocity (inches/s)
+
+    // Contact constraint (set by collision, prevents motor force into contact)
+    bool in_contact;        // True if robot is in contact with obstacle
+    float contact_nx;       // Contact normal X (direction robot was pushed)
+    float contact_nz;       // Contact normal Z
 } Drivetrain;
 
 // Initialize drivetrain with default VEX IQ configuration
