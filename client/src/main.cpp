@@ -976,6 +976,9 @@ static void run_hierarchical_collision_detection(
 // Collision Response Functions (Hierarchical: submodel broad-phase, part narrow-phase)
 // =============================================================================
 
+// Collision skin distance - small buffer to prevent tunneling
+static const float COLLISION_SKIN = 0.05f;  // 0.05 inches
+
 // Apply wall collision response using hierarchical detection
 // Broad phase: submodel OBBs, Narrow phase: part OBBs
 static void apply_wall_collision_response(
@@ -1005,6 +1008,11 @@ static void apply_wall_collision_response(
             // Broad phase: does submodel OBB hit this wall?
             if (!obb_intersects_aabb(&world_submodel_obb, &walls[w])) continue;
 
+            // Mark submodel as colliding (for visualization)
+            if (robot->submodel_collision_state[sm] < COLLISION_SUBMODEL) {
+                robot->submodel_collision_state[sm] = COLLISION_SUBMODEL;
+            }
+
             // Narrow phase: check individual parts in this submodel
             int start = robot->submodel_part_start[sm];
             int count = robot->submodel_part_count[sm];
@@ -1020,19 +1028,22 @@ static void apply_wall_collision_response(
 
                 if (!obb_intersects_aabb(&world_part_obb, &walls[w])) continue;
 
+                // Mark part as colliding (for visualization)
+                part.collision_state = COLLISION_EXTERNAL;
+
                 // Part actually hits wall - calculate penetration
                 AABB part_aabb;
                 obb_get_enclosing_aabb(&world_part_obb, &part_aabb);
 
                 float push_x = 0.0f, push_z = 0.0f;
                 if (w == 0 && part_aabb.min.x < -field_half_width) {  // Left
-                    push_x = -field_half_width - part_aabb.min.x;
+                    push_x = -field_half_width - part_aabb.min.x + COLLISION_SKIN;
                 } else if (w == 1 && part_aabb.max.x > field_half_width) {  // Right
-                    push_x = field_half_width - part_aabb.max.x;
+                    push_x = field_half_width - part_aabb.max.x - COLLISION_SKIN;
                 } else if (w == 2 && part_aabb.min.z < -field_half_depth) {  // Back
-                    push_z = -field_half_depth - part_aabb.min.z;
+                    push_z = -field_half_depth - part_aabb.min.z + COLLISION_SKIN;
                 } else if (w == 3 && part_aabb.max.z > field_half_depth) {  // Front
-                    push_z = field_half_depth - part_aabb.max.z;
+                    push_z = field_half_depth - part_aabb.max.z - COLLISION_SKIN;
                 }
 
                 // Track maximum penetration
@@ -1049,8 +1060,16 @@ static void apply_wall_collision_response(
         robot->offset[0] = robot->drivetrain.pos_x;
         robot->offset[2] = robot->drivetrain.pos_z;
 
-        if (max_push_x != 0.0f) robot->drivetrain.vel_x = 0.0f;
-        if (max_push_z != 0.0f) robot->drivetrain.vel_z = 0.0f;
+        // Zero out velocity into wall (keep sliding velocity)
+        if (max_push_x != 0.0f) {
+            robot->drivetrain.vel_x = 0.0f;
+        }
+        if (max_push_z != 0.0f) {
+            robot->drivetrain.vel_z = 0.0f;
+        }
+        // Light damping to smooth contact
+        robot->drivetrain.vel_x *= 0.9f;
+        robot->drivetrain.vel_z *= 0.9f;
     }
 }
 
@@ -1074,6 +1093,14 @@ static void apply_robot_collision_response(
 
             // Broad phase: do submodel OBBs intersect?
             if (!obb_intersects_obb(&world_sm_a, &world_sm_b)) continue;
+
+            // Mark submodels as colliding (for visualization)
+            if (robot_a->submodel_collision_state[sm_a] < COLLISION_SUBMODEL) {
+                robot_a->submodel_collision_state[sm_a] = COLLISION_SUBMODEL;
+            }
+            if (robot_b->submodel_collision_state[sm_b] < COLLISION_SUBMODEL) {
+                robot_b->submodel_collision_state[sm_b] = COLLISION_SUBMODEL;
+            }
 
             // Narrow phase: check part-part collisions
             int start_a = robot_a->submodel_part_start[sm_a];
@@ -1101,6 +1128,10 @@ static void apply_robot_collision_response(
 
                     if (!obb_intersects_obb(&world_part_a, &world_part_b)) continue;
 
+                    // Mark parts as colliding (for visualization)
+                    part_a.collision_state = COLLISION_PART;
+                    part_b.collision_state = COLLISION_PART;
+
                     // Parts actually collide - calculate push from centers
                     AABB aabb_a, aabb_b;
                     obb_get_enclosing_aabb(&world_part_a, &aabb_a);
@@ -1111,7 +1142,7 @@ static void apply_robot_collision_response(
                     float overlap_z = fminf(aabb_a.max.z, aabb_b.max.z) - fmaxf(aabb_a.min.z, aabb_b.min.z);
 
                     if (overlap_x > 0 && overlap_z > 0) {
-                        // Push along axis of minimum penetration
+                        // Push along axis of minimum penetration (plus skin)
                         float center_a_x = (aabb_a.min.x + aabb_a.max.x) * 0.5f;
                         float center_a_z = (aabb_a.min.z + aabb_a.max.z) * 0.5f;
                         float center_b_x = (aabb_b.min.x + aabb_b.max.x) * 0.5f;
@@ -1119,10 +1150,12 @@ static void apply_robot_collision_response(
 
                         if (overlap_x < overlap_z) {
                             // Push along X
-                            total_push_x += (center_a_x < center_b_x) ? -overlap_x : overlap_x;
+                            float push = overlap_x + COLLISION_SKIN;
+                            total_push_x += (center_a_x < center_b_x) ? -push : push;
                         } else {
                             // Push along Z
-                            total_push_z += (center_a_z < center_b_z) ? -overlap_z : overlap_z;
+                            float push = overlap_z + COLLISION_SKIN;
+                            total_push_z += (center_a_z < center_b_z) ? -push : push;
                         }
                         collision_count++;
                     }
@@ -1146,11 +1179,32 @@ static void apply_robot_collision_response(
         robot_b->offset[0] = robot_b->drivetrain.pos_x;
         robot_b->offset[2] = robot_b->drivetrain.pos_z;
 
-        // Dampen velocities
-        robot_a->drivetrain.vel_x *= 0.5f;
-        robot_a->drivetrain.vel_z *= 0.5f;
-        robot_b->drivetrain.vel_x *= 0.5f;
-        robot_b->drivetrain.vel_z *= 0.5f;
+        // Remove velocity component in push direction for both robots
+        float push_len = sqrtf(push_x * push_x + push_z * push_z);
+        if (push_len > 0.001f) {
+            float nx = push_x / push_len;
+            float nz = push_z / push_len;
+
+            // Robot A: remove velocity in +push direction
+            float vel_into_a = robot_a->drivetrain.vel_x * nx + robot_a->drivetrain.vel_z * nz;
+            if (vel_into_a < 0) {
+                robot_a->drivetrain.vel_x -= vel_into_a * nx;
+                robot_a->drivetrain.vel_z -= vel_into_a * nz;
+            }
+
+            // Robot B: remove velocity in -push direction
+            float vel_into_b = robot_b->drivetrain.vel_x * (-nx) + robot_b->drivetrain.vel_z * (-nz);
+            if (vel_into_b < 0) {
+                robot_b->drivetrain.vel_x -= vel_into_b * (-nx);
+                robot_b->drivetrain.vel_z -= vel_into_b * (-nz);
+            }
+
+            // Light damping to smooth contact
+            robot_a->drivetrain.vel_x *= 0.9f;
+            robot_a->drivetrain.vel_z *= 0.9f;
+            robot_b->drivetrain.vel_x *= 0.9f;
+            robot_b->drivetrain.vel_z *= 0.9f;
+        }
     }
 }
 
@@ -1174,6 +1228,11 @@ static void apply_cylinder_collision_response(
             // Broad phase: does submodel OBB hit cylinder?
             if (!obb_intersects_circle(&world_sm, cyl.x, cyl.z, cyl.radius)) continue;
 
+            // Mark submodel as colliding (for visualization)
+            if (robot->submodel_collision_state[sm] < COLLISION_SUBMODEL) {
+                robot->submodel_collision_state[sm] = COLLISION_SUBMODEL;
+            }
+
             // Narrow phase: check individual parts
             int start = robot->submodel_part_start[sm];
             int count = robot->submodel_part_count[sm];
@@ -1188,6 +1247,9 @@ static void apply_cylinder_collision_response(
                 transform_obb_to_world(&part.local_obb, robot, &world_part);
 
                 if (!obb_intersects_circle(&world_part, cyl.x, cyl.z, cyl.radius)) continue;
+
+                // Mark part as colliding (for visualization)
+                part.collision_state = COLLISION_EXTERNAL;
 
                 // Part hits cylinder - calculate penetration
                 AABB part_aabb;
@@ -1205,7 +1267,8 @@ static void apply_cylinder_collision_response(
 
                 float combined_radius = cyl.radius + part_radius;
                 if (dist < combined_radius && dist > 0.001f) {
-                    float penetration = combined_radius - dist;
+                    // Add skin distance to prevent jitter
+                    float penetration = combined_radius - dist + COLLISION_SKIN;
                     if (penetration > max_penetration) {
                         max_penetration = penetration;
                         push_nx = dx / dist;
@@ -1222,12 +1285,15 @@ static void apply_cylinder_collision_response(
             robot->offset[0] = robot->drivetrain.pos_x;
             robot->offset[2] = robot->drivetrain.pos_z;
 
-            // Reflect velocity away from cylinder
+            // Remove velocity component going into the cylinder (keep tangential)
             float vel_into = robot->drivetrain.vel_x * (-push_nx) + robot->drivetrain.vel_z * (-push_nz);
             if (vel_into > 0) {
                 robot->drivetrain.vel_x += vel_into * push_nx;
                 robot->drivetrain.vel_z += vel_into * push_nz;
             }
+            // Light damping to smooth contact
+            robot->drivetrain.vel_x *= 0.9f;
+            robot->drivetrain.vel_z *= 0.9f;
         }
     }
 }
