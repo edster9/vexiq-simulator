@@ -81,6 +81,7 @@
 #include "physics/obb.h"
 #include "ipc/gamepad.h"
 #include "ipc/python_bridge.h"
+#include "physics/robot_config.h"
 
 #include <GL/glew.h>
 #include <SDL.h>
@@ -319,6 +320,10 @@ struct RobotInstance {
     float rotation_y;     // Rotation around Y axis (radians)
     float ground_offset;  // Computed ground offset for this robot
     Drivetrain drivetrain; // Physics drivetrain for this robot
+
+    // Python IPC bridge (for robots with iqpython programs)
+    PythonBridge* bridge;     // NULL if no program
+    RobotConfig motor_config; // Motor port assignments
 
     // From robotdef
     float rotation_center[3];  // Drivetrain center in LDU (converted to world coords for rotation)
@@ -1062,28 +1067,12 @@ static void apply_wall_collision_response(
         }
     }
 
-    // Apply the maximum push needed
+    // Apply the maximum push needed (position correction only)
     if (max_push_x != 0.0f || max_push_z != 0.0f) {
         robot->drivetrain.pos_x += max_push_x;
         robot->drivetrain.pos_z += max_push_z;
         robot->offset[0] = robot->drivetrain.pos_x;
         robot->offset[2] = robot->drivetrain.pos_z;
-
-        // Zero out velocity into wall (keep sliding velocity)
-        if (max_push_x != 0.0f) {
-            robot->drivetrain.vel_x = 0.0f;
-        }
-        if (max_push_z != 0.0f) {
-            robot->drivetrain.vel_z = 0.0f;
-        }
-
-        // Set contact constraint for next physics update
-        float push_len = sqrtf(max_push_x * max_push_x + max_push_z * max_push_z);
-        if (push_len > 0.001f) {
-            robot->drivetrain.in_contact = true;
-            robot->drivetrain.contact_nx = max_push_x / push_len;
-            robot->drivetrain.contact_nz = max_push_z / push_len;
-        }
     }
 }
 
@@ -1146,7 +1135,7 @@ static void apply_robot_collision_response(
         }
     }
 
-    // Apply averaged push (split between both robots)
+    // Apply averaged push (split between both robots) - position correction only
     if (collision_count > 0) {
         float push_x = (total_push_x / collision_count) * 0.5f;
         float push_z = (total_push_z / collision_count) * 0.5f;
@@ -1160,35 +1149,6 @@ static void apply_robot_collision_response(
         robot_b->drivetrain.pos_z -= push_z;
         robot_b->offset[0] = robot_b->drivetrain.pos_x;
         robot_b->offset[2] = robot_b->drivetrain.pos_z;
-
-        // Remove velocity component in push direction for both robots
-        float push_len = sqrtf(push_x * push_x + push_z * push_z);
-        if (push_len > 0.001f) {
-            float nx = push_x / push_len;
-            float nz = push_z / push_len;
-
-            // Robot A: remove velocity in +push direction
-            float vel_into_a = robot_a->drivetrain.vel_x * nx + robot_a->drivetrain.vel_z * nz;
-            if (vel_into_a < 0) {
-                robot_a->drivetrain.vel_x -= vel_into_a * nx;
-                robot_a->drivetrain.vel_z -= vel_into_a * nz;
-            }
-
-            // Robot B: remove velocity in -push direction
-            float vel_into_b = robot_b->drivetrain.vel_x * (-nx) + robot_b->drivetrain.vel_z * (-nz);
-            if (vel_into_b < 0) {
-                robot_b->drivetrain.vel_x -= vel_into_b * (-nx);
-                robot_b->drivetrain.vel_z -= vel_into_b * (-nz);
-            }
-
-            // Set contact constraints for next physics update
-            robot_a->drivetrain.in_contact = true;
-            robot_a->drivetrain.contact_nx = nx;
-            robot_a->drivetrain.contact_nz = nz;
-            robot_b->drivetrain.in_contact = true;
-            robot_b->drivetrain.contact_nx = -nx;
-            robot_b->drivetrain.contact_nz = -nz;
-        }
     }
 }
 
@@ -1516,6 +1476,8 @@ int main(int argc, char** argv) {
             robot.offset[2] = scene_robot->z;
             robot.rotation_y = scene_robot->rotation_y * DEG_TO_RAD_CONST;
             robot.ground_offset = 0.0f;  // Will compute after loading parts
+            robot.bridge = nullptr;      // Will init if robot has iqpython
+            robot_config_init(&robot.motor_config);
             robot.has_robotdef = false;
             robot.rotation_center[0] = 0.0f;
             robot.rotation_center[1] = 0.0f;
@@ -1583,6 +1545,40 @@ int main(int argc, char** argv) {
             drivetrain_init(&robot.drivetrain);
             drivetrain_set_position(&robot.drivetrain, scene_robot->x, scene_robot->z, robot.rotation_y);
             drivetrain_set_friction(&robot.drivetrain, scene.physics.friction_coeff);
+
+            // Load config file if specified in scene
+            if (scene_robot->config_file[0] != '\0') {
+                char config_path[1024];
+                snprintf(config_path, sizeof(config_path), "%s" PATH_SEP "robots" PATH_SEP "%s",
+                         models_dir, scene_robot->config_file);
+                if (robot_config_load(config_path, &robot.motor_config)) {
+                    printf("  Loaded config: %s\n", scene_robot->config_file);
+                } else {
+                    fprintf(stderr, "  Failed to load config: %s\n", config_path);
+                }
+            }
+
+            // Initialize Python bridge if robot has an iqpython program
+            if (scene_robot->has_program && scene_robot->iqpython_file[0] != '\0') {
+                char iqpython_path[1024];
+                char simulator_dir[1024];
+                char exe_dir_buf[512];
+                get_exe_dir(exe_dir_buf, sizeof(exe_dir_buf));
+                // iqpython files are in <project>/iqpython/, not models/robots/
+                snprintf(iqpython_path, sizeof(iqpython_path), "%s" PATH_SEP ".." PATH_SEP ".." PATH_SEP "iqpython" PATH_SEP "%s",
+                         exe_dir_buf, scene_robot->iqpython_file);
+                snprintf(simulator_dir, sizeof(simulator_dir), "%s" PATH_SEP ".." PATH_SEP ".." PATH_SEP "simulator",
+                         exe_dir_buf);
+
+                robot.bridge = new PythonBridge();
+                if (python_bridge_init(robot.bridge, iqpython_path, simulator_dir)) {
+                    printf("  Started Python bridge for: %s\n", scene_robot->iqpython_file);
+                } else {
+                    fprintf(stderr, "  Failed to start Python bridge for: %s\n", scene_robot->iqpython_file);
+                    delete robot.bridge;
+                    robot.bridge = nullptr;
+                }
+            }
 
             int current_robot_index = (int)robots.size();
             robots.push_back(robot);
@@ -1883,9 +1879,80 @@ int main(int argc, char** argv) {
             }
         }
 
-        // Motor control is now driven by IQPython via IPC
-        // TODO: Read motor states from PythonBridge and apply to drivetrain
-        // For now, motors are at rest (will be wired up in next step)
+        // Motor control driven by IQPython via IPC
+        // Send gamepad to active robot, update all bridges, apply motor states
+        static int debug_frame = 0;
+        debug_frame++;
+        bool debug_print = (debug_frame % 60 == 0);  // Print once per second
+
+        for (size_t i = 0; i < robots.size(); i++) {
+            RobotInstance& robot = robots[i];
+
+            if (debug_print && i == 0) {
+                printf("[DEBUG] Robot %zu: bridge=%p, config: left_port=%d, right_port=%d\n",
+                       i, (void*)robot.bridge,
+                       robot.motor_config.left_motor_port,
+                       robot.motor_config.right_motor_port);
+            }
+
+            if (!robot.bridge) continue;
+
+            // Send gamepad only to active robot
+            if ((int)i == active_robot_index) {
+                python_bridge_send_gamepad(robot.bridge, &gamepad);
+                if (debug_print) {
+                    printf("[DEBUG] Sent gamepad to robot %zu: A=%d B=%d\n",
+                           i, gamepad.axes.a, gamepad.axes.b);
+                }
+            }
+
+            // Send tick to all robots with bridges
+            python_bridge_send_tick(robot.bridge, dt);
+
+            // Update bridge (read incoming messages)
+            python_bridge_update(robot.bridge);
+
+            if (debug_print) {
+                printf("[DEBUG] Robot %zu bridge: connected=%d, ready=%d\n",
+                       i, robot.bridge->connected, robot.bridge->robot_ready);
+            }
+
+            // Apply motor states to drivetrain
+            if (python_bridge_is_ready(robot.bridge)) {
+                RobotState* state = python_bridge_get_state(robot.bridge);
+                float left_pct = 0.0f;
+                float right_pct = 0.0f;
+
+                if (debug_print) {
+                    printf("[DEBUG] Robot %zu: motor_count=%d\n", i, state->motor_count);
+                    for (int m = 0; m < state->motor_count; m++) {
+                        printf("[DEBUG]   Motor port=%d speed=%d spinning=%d\n",
+                               state->motors[m].port, state->motors[m].speed,
+                               state->motors[m].spinning);
+                    }
+                }
+
+                // Find motors matching our config ports
+                for (int m = 0; m < state->motor_count; m++) {
+                    MotorState* motor = &state->motors[m];
+                    if (motor->port == robot.motor_config.left_motor_port) {
+                        left_pct = (float)motor->speed;
+                    }
+                    if (motor->port == robot.motor_config.right_motor_port) {
+                        right_pct = (float)motor->speed;
+                    }
+                }
+
+                if (debug_print) {
+                    printf("[DEBUG] Robot %zu: left_pct=%.1f right_pct=%.1f\n",
+                           i, left_pct, right_pct);
+                }
+
+                drivetrain_set_motors(&robot.drivetrain, left_pct, right_pct);
+            } else if (debug_print) {
+                printf("[DEBUG] Robot %zu: bridge not ready\n", i);
+            }
+        }
 
         // =====================================================================
         // Physics update order:
@@ -2245,6 +2312,16 @@ int main(int argc, char** argv) {
     shader_destroy(&mesh_shader);
     text_destroy();
     debug_destroy();
+
+    // Cleanup Python bridges
+    for (auto& robot : robots) {
+        if (robot.bridge) {
+            python_bridge_destroy(robot.bridge);
+            delete robot.bridge;
+            robot.bridge = nullptr;
+        }
+    }
+
     gamepad_destroy(&gamepad);
     axis_gizmo_destroy(&axis_gizmo);
     objects_destroy(&game_objects);

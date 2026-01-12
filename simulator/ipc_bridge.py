@@ -83,31 +83,34 @@ class IPCBridge:
         if not self._controller:
             return
 
-        # Update controller axes (A, B, C, D)
+        # Update controller axes (A, B, C, D) via ControllerAxis objects
         axes = data.get("axes", {})
-        self._controller._axis_a = int(axes.get("A", 0))
-        self._controller._axis_b = int(axes.get("B", 0))
-        self._controller._axis_c = int(axes.get("C", 0))
-        self._controller._axis_d = int(axes.get("D", 0))
+        self._controller.axisA.set_position(int(axes.get("A", 0)))
+        self._controller.axisB.set_position(int(axes.get("B", 0)))
+        self._controller.axisC.set_position(int(axes.get("C", 0)))
+        self._controller.axisD.set_position(int(axes.get("D", 0)))
 
-        # Update controller buttons
+        # Update controller buttons via ControllerButton objects
         buttons = data.get("buttons", {})
-        self._controller._button_l_up = buttons.get("LUp", False)
-        self._controller._button_l_down = buttons.get("LDown", False)
-        self._controller._button_r_up = buttons.get("RUp", False)
-        self._controller._button_r_down = buttons.get("RDown", False)
-        self._controller._button_e_up = buttons.get("EUp", False)
-        self._controller._button_e_down = buttons.get("EDown", False)
-        self._controller._button_f_up = buttons.get("FUp", False)
-        self._controller._button_f_down = buttons.get("FDown", False)
+        self._controller.buttonLUp.set_pressed(buttons.get("LUp", False))
+        self._controller.buttonLDown.set_pressed(buttons.get("LDown", False))
+        self._controller.buttonRUp.set_pressed(buttons.get("RUp", False))
+        self._controller.buttonRDown.set_pressed(buttons.get("RDown", False))
+        self._controller.buttonEUp.set_pressed(buttons.get("EUp", False))
+        self._controller.buttonEDown.set_pressed(buttons.get("EDown", False))
+        self._controller.buttonFUp.set_pressed(buttons.get("FUp", False))
+        self._controller.buttonFDown.set_pressed(buttons.get("FDown", False))
 
     def handle_tick(self, data: dict):
         """Handle tick - send motor/pneumatic state back to C++."""
         # Collect motor states
+        # Use wheel_velocity (logical wheel direction) not actual_velocity (physical motor direction)
+        # The 'reversed' flag on motors compensates for physical mounting, but drivetrain
+        # physics needs the logical wheel direction
         motors = {}
         for port, motor in vex_stub.Motor.get_all_instances().items():
             motors[port] = {
-                "speed": motor.actual_velocity,
+                "speed": motor.wheel_velocity,
                 "spinning": motor._spinning,
                 "position": motor._position,
             }

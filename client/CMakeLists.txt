@@ -34,6 +34,7 @@ set(SOURCES
     src/scene/scene.cpp
     src/physics/drivetrain.cpp
     src/physics/robotdef.cpp
+    src/physics/robot_config.cpp
     src/physics/collision.cpp
     src/physics/obb.cpp
     src/ipc/subprocess.cpp

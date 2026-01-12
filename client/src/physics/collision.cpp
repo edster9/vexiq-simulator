@@ -154,42 +154,42 @@ bool collision_resolve_forces(CollisionWorld* world, const float* velocities, Co
         // Check each wall and calculate force based on penetration + damping
         float penetration;
 
-        // Left wall (min_x)
+        // Left wall (min_x) - normal points +x (into field)
         penetration = (world->field.min_x + robot->radius) - robot->x;
         if (penetration > 0) {
             result->force_x += COLLISION_STIFFNESS * penetration;
-            // Damping: oppose ALL velocity when in contact (prevents bounce)
-            result->force_x -= COLLISION_DAMPING * vx;
+            // Damping: only oppose velocity INTO the wall (negative vx)
+            if (vx < 0) result->force_x -= COLLISION_DAMPING * vx;
             result->hit_wall = true;
             any_collision = true;
         }
 
-        // Right wall (max_x)
+        // Right wall (max_x) - normal points -x (into field)
         penetration = robot->x - (world->field.max_x - robot->radius);
         if (penetration > 0) {
             result->force_x -= COLLISION_STIFFNESS * penetration;
-            // Damping: oppose ALL velocity when in contact
-            result->force_x -= COLLISION_DAMPING * vx;
+            // Damping: only oppose velocity INTO the wall (positive vx)
+            if (vx > 0) result->force_x -= COLLISION_DAMPING * vx;
             result->hit_wall = true;
             any_collision = true;
         }
 
-        // Back wall (min_z)
+        // Back wall (min_z) - normal points +z (into field)
         penetration = (world->field.min_z + robot->radius) - robot->z;
         if (penetration > 0) {
             result->force_z += COLLISION_STIFFNESS * penetration;
-            // Damping: oppose ALL velocity when in contact
-            result->force_z -= COLLISION_DAMPING * vz;
+            // Damping: only oppose velocity INTO the wall (negative vz)
+            if (vz < 0) result->force_z -= COLLISION_DAMPING * vz;
             result->hit_wall = true;
             any_collision = true;
         }
 
-        // Front wall (max_z)
+        // Front wall (max_z) - normal points -z (into field)
         penetration = robot->z - (world->field.max_z - robot->radius);
         if (penetration > 0) {
             result->force_z -= COLLISION_STIFFNESS * penetration;
-            // Damping: oppose ALL velocity when in contact
-            result->force_z -= COLLISION_DAMPING * vz;
+            // Damping: only oppose velocity INTO the wall (positive vz)
+            if (vz > 0) result->force_z -= COLLISION_DAMPING * vz;
             result->hit_wall = true;
             any_collision = true;
         }
@@ -222,10 +222,12 @@ bool collision_resolve_forces(CollisionWorld* world, const float* velocities, Co
                 result->force_x += COLLISION_STIFFNESS * penetration * nx;
                 result->force_z += COLLISION_STIFFNESS * penetration * nz;
 
-                // Damping: oppose ALL velocity along collision normal (prevents bounce)
+                // Damping: only oppose velocity INTO the cylinder (negative normal velocity)
                 float vel_normal = vx * nx + vz * nz;
-                result->force_x -= COLLISION_DAMPING * vel_normal * nx;
-                result->force_z -= COLLISION_DAMPING * vel_normal * nz;
+                if (vel_normal < 0) {
+                    result->force_x -= COLLISION_DAMPING * vel_normal * nx;
+                    result->force_z -= COLLISION_DAMPING * vel_normal * nz;
+                }
 
                 result->hit_cylinder = true;
                 any_collision = true;
@@ -267,15 +269,17 @@ bool collision_resolve_forces(CollisionWorld* world, const float* velocities, Co
                 result2->force_x -= spring_force * nx;
                 result2->force_z -= spring_force * nz;
 
-                // Damping: oppose ALL relative velocity along collision normal (prevents bounce)
+                // Damping: only oppose relative velocity INTO each other (negative normal)
                 float rel_vx = vx1 - vx2;
                 float rel_vz = vz1 - vz2;
                 float rel_vel_normal = rel_vx * nx + rel_vz * nz;
-                float damping_force = -COLLISION_DAMPING * rel_vel_normal;
-                result1->force_x += damping_force * nx;
-                result1->force_z += damping_force * nz;
-                result2->force_x -= damping_force * nx;
-                result2->force_z -= damping_force * nz;
+                if (rel_vel_normal < 0) {
+                    float damping_force = -COLLISION_DAMPING * rel_vel_normal;
+                    result1->force_x += damping_force * nx;
+                    result1->force_z += damping_force * nz;
+                    result2->force_x -= damping_force * nx;
+                    result2->force_z -= damping_force * nz;
+                }
 
                 result1->hit_robot = true;
                 result2->hit_robot = true;

@@ -61,14 +61,26 @@ extern "C" {
 
 // Linear damping (air resistance, rolling resistance)
 // Velocity decay factor per frame (1.0 = no damping)
+// At 60 FPS: 0.99^60 = 0.55 after 1 second (reasonable coasting)
 // Lower values = faster stopping when motors off
-#define VEXIQ_LINEAR_DAMPING 0.90f
+#define VEXIQ_LINEAR_DAMPING 0.99f
 
-// Angular damping for rotation
-#define VEXIQ_ANGULAR_DAMPING 0.85f
+// Angular damping for rotation (slightly more to stop spinning quickly)
+// At 60 FPS: 0.98^60 = 0.30 after 1 second
+#define VEXIQ_ANGULAR_DAMPING 0.98f
 
 // Collision restitution (bounciness, 0 = no bounce, 1 = perfect bounce)
 #define VEXIQ_COLLISION_RESTITUTION 0.2f
+
+// =============================================================================
+// Speed Scaling (for tuning feel)
+// =============================================================================
+
+// Forward/backward speed scale (1.0 = full speed)
+#define VEXIQ_FORWARD_SPEED_SCALE 0.765f
+
+// Turn rate scale (1.0 = full turn speed)
+#define VEXIQ_TURN_SPEED_SCALE 0.35f
 
 // =============================================================================
 // Conversion Helpers

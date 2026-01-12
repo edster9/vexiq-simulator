@@ -166,6 +166,10 @@ void drivetrain_update(Drivetrain* dt, float dt_sec) {
     float track_half = dt->config.track_width / 2.0f;
     float drive_torque = (right_actual_force - left_actual_force) * track_half;
 
+    // Apply speed scaling for tuning feel
+    forward_force *= VEXIQ_FORWARD_SPEED_SCALE;
+    drive_torque *= VEXIQ_TURN_SPEED_SCALE;
+
     // =========================================================================
     // Step 5: Transform external forces to robot frame and add
     // =========================================================================
@@ -217,29 +221,28 @@ void drivetrain_update(Drivetrain* dt, float dt_sec) {
     vel_lateral += lateral_accel * dt_sec;
     dt->angular_vel += angular_accel * dt_sec;
 
-    // Apply damping
+    // Apply damping (air resistance, rolling resistance)
     vel_forward *= VEXIQ_LINEAR_DAMPING;
     vel_lateral *= VEXIQ_LINEAR_DAMPING;
     dt->angular_vel *= VEXIQ_ANGULAR_DAMPING;
 
+    // Apply motor braking when motors are at zero (VEX motors brake by default)
+    // This simulates back-EMF braking - motors resist motion when unpowered
+    bool motors_off = (fabsf(dt->left_motor_pct) < 1.0f && fabsf(dt->right_motor_pct) < 1.0f);
+    if (motors_off) {
+        // Strong braking when motors are off - stop quickly
+        float brake_factor = 0.85f;  // Aggressive braking
+        vel_forward *= brake_factor;
+        dt->angular_vel *= brake_factor;
+
+        // Stop completely if very slow (prevents drift)
+        if (fabsf(vel_forward) < 0.5f) vel_forward = 0.0f;
+        if (fabsf(dt->angular_vel) < 0.01f) dt->angular_vel = 0.0f;
+    }
+
     // Transform back to world frame
     dt->vel_x = vel_forward * sin_h + vel_lateral * cos_h;
     dt->vel_z = vel_forward * cos_h - vel_lateral * sin_h;
-
-    // =========================================================================
-    // Step 7b: Apply contact constraint (prevent velocity into obstacles)
-    // =========================================================================
-    if (dt->in_contact) {
-        // Check if velocity is going into the contact
-        float vel_into_contact = dt->vel_x * (-dt->contact_nx) + dt->vel_z * (-dt->contact_nz);
-        if (vel_into_contact > 0) {
-            // Remove velocity component going into contact
-            dt->vel_x += vel_into_contact * dt->contact_nx;
-            dt->vel_z += vel_into_contact * dt->contact_nz;
-        }
-        // Clear contact for next frame (collision will re-set if still in contact)
-        dt->in_contact = false;
-    }
 
     // =========================================================================
     // Step 8: Integrate position
