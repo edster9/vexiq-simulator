@@ -5,19 +5,14 @@
 #include "../math/mat4.h"
 #include "../platform/platform.h"
 
-// Blender-style orbit camera
+// First-person camera
 typedef struct OrbitCamera {
-    Vec3 target;        // Point camera orbits around
-    float distance;     // Distance from target
-    float yaw;          // Horizontal orbit angle (radians)
-    float pitch;        // Vertical orbit angle (radians)
+    Vec3 position;      // Camera position in world
+    float yaw;          // Horizontal look angle (radians, 0 = looking along +Z)
+    float pitch;        // Vertical look angle (radians, 0 = level, negative = looking down)
 
-    float orbit_sensitivity;
-    float pan_sensitivity;
-    float zoom_sensitivity;
-
-    float min_distance;
-    float max_distance;
+    float look_sensitivity;
+    float move_speed;
 
     float fov;          // Field of view (radians)
     float near;

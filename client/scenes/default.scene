@@ -1,21 +1,47 @@
 # Default VEX IQ Scene
-# Two robots on the competition field
+# YAML-like format for scene configuration
 
-name Default Scene
+name: Default Scene
 
-# Robot definitions: robot <file> <x> <y> <z> [rotation_y_degrees]
-# Positions are in inches, rotation is degrees around Y axis
+# Physics settings
+physics:
+  friction: 0.8
+  cylinder_friction: 0.5
+  gravity: 386.1
 
-# ClawbotIQ on the left side of the field
-robot ClawbotIQ.mpd -20 0 0 0
+# Robots in the scene
+# Robots with iqpython can be controlled, others are static
+# Press 1-4 to switch active robot (only one receives gamepad input)
+robots:
+  - mpd: ClawbotIQ.mpd
+    position: [-20, 0, 0]
+    rotation: 0
+    iqpython: ClawbotIQ.iqpython
+    config: ClawbotIQ.config
 
-# Ike on the right side of the field, facing the opposite direction
-robot Ike.mpd 20 0 0 180
+  - mpd: Ike.mpd
+    position: [20, 0, 0]
+    rotation: 180
 
-# Cylinder obstacles: cylinder <x> <z> <radius> <height> <r> <g> <b>
+# Cylinder obstacles
 # 4" diameter = 2" radius, 7" tall
+cylinders:
+  - position: [-30, -20]
+    radius: 2
+    height: 7
+    color: [0.9, 0.2, 0.2]
 
-cylinder -30 -20 2 7 0.9 0.2 0.2
-cylinder  30 -20 2 7 0.2 0.9 0.2
-cylinder -30  20 2 7 0.2 0.2 0.9
-cylinder  30  20 2 7 0.9 0.9 0.2
+  - position: [30, -20]
+    radius: 2
+    height: 7
+    color: [0.2, 0.9, 0.2]
+
+  - position: [-30, 20]
+    radius: 2
+    height: 7
+    color: [0.2, 0.2, 0.9]
+
+  - position: [30, 20]
+    radius: 2
+    height: 7
+    color: [0.9, 0.9, 0.2]

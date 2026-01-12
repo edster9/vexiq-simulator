@@ -7,93 +7,88 @@
 void camera_init(OrbitCamera* cam) {
     // World scale: 1 unit = 1 inch
     // VEX IQ table is 96" x 72" (8ft x 6ft)
-    cam->target = vec3(0, 0, 0);     // Look at center of table
-    cam->distance = 120.0f;          // ~10 feet back to see whole table
-    cam->yaw = 0.0f;                 // Looking straight at table
-    cam->pitch = -0.6f;              // Looking down at ~35 degrees
+    // Start camera above and behind the table, looking down at it
+    cam->position = vec3(0, 80, 120);  // 80" up, 120" back (10 feet)
+    cam->yaw = 0.0f;                    // Looking along -Z (toward table)
+    cam->pitch = -0.5f;                 // Looking down ~30 degrees
 
-    cam->orbit_sensitivity = 0.005f;
-    cam->pan_sensitivity = 0.01f;
-    cam->zoom_sensitivity = 1.0f;
-
-    cam->min_distance = 0.5f;        // ~0.5 inches minimum (allow close zoom)
-    cam->max_distance = 500.0f;      // ~40 feet max
+    cam->look_sensitivity = 0.005f;
+    cam->move_speed = 60.0f;            // 60 inches per second
 
     cam->fov = 60.0f * DEG_TO_RAD;
     cam->near = 0.1f;
-    cam->far = 2000.0f;              // ~160 feet far plane
+    cam->far = 2000.0f;                 // ~160 feet far plane
+}
+
+// Get forward direction from yaw/pitch
+static Vec3 camera_forward(OrbitCamera* cam) {
+    float cos_pitch = cosf(cam->pitch);
+    return vec3(
+        -sinf(cam->yaw) * cos_pitch,
+        sinf(cam->pitch),
+        -cosf(cam->yaw) * cos_pitch
+    );
+}
+
+// Get right direction from yaw (horizontal only)
+static Vec3 camera_right(OrbitCamera* cam) {
+    return vec3(-cosf(cam->yaw), 0, sinf(cam->yaw));
 }
 
 Vec3 camera_position(OrbitCamera* cam) {
-    // Spherical coordinates: position on sphere around target
-    float x = cam->target.x + cam->distance * sinf(cam->yaw) * cosf(cam->pitch);
-    float y = cam->target.y - cam->distance * sinf(cam->pitch);
-    float z = cam->target.z + cam->distance * cosf(cam->yaw) * cosf(cam->pitch);
-    return vec3(x, y, z);
+    return cam->position;
 }
 
 void camera_update(OrbitCamera* cam, InputState* input, float dt) {
-    (void)dt;  // Not used for orbit camera
-
     bool mmb_held = input->mouse_buttons[MOUSE_MIDDLE];
-    bool shift_held = input->keys[KEY_LSHIFT] || input->keys[KEY_RSHIFT];
 
+    // Middle mouse: look around (first-person style)
     if (mmb_held) {
         float dx = (float)input->mouse_dx;
         float dy = (float)input->mouse_dy;
 
-        if (shift_held) {
-            // Pan: move target in camera's local screen space
-            // Compute camera's right and up vectors properly
-            float cos_yaw = cosf(cam->yaw);
-            float sin_yaw = sinf(cam->yaw);
-            float cos_pitch = cosf(cam->pitch);
-            float sin_pitch = sinf(cam->pitch);
+        cam->yaw -= dx * cam->look_sensitivity;
+        cam->pitch -= dy * cam->look_sensitivity;
 
-            // View direction (from camera toward target)
-            Vec3 forward = vec3(-sin_yaw * cos_pitch, sin_pitch, -cos_yaw * cos_pitch);
-
-            // Right vector = cross(forward, world_up), then normalize
-            // For a right-handed system: right = forward × up
-            Vec3 world_up = vec3(0, 1, 0);
-            Vec3 right = vec3_normalize(vec3_cross(forward, world_up));
-
-            // Camera up vector = cross(right, forward) for proper screen-space up
-            Vec3 up = vec3_cross(right, forward);
-
-            // Scale pan by distance for consistent feel
-            float pan_scale = cam->pan_sensitivity * cam->distance * 0.1f;
-
-            // Blender-style pan: drag right = view moves right = target moves right
-            cam->target = vec3_add(cam->target, vec3_scale(right, -dx * pan_scale));
-            cam->target = vec3_add(cam->target, vec3_scale(up, dy * pan_scale));
-        } else {
-            // Orbit: rotate around target
-            cam->yaw -= dx * cam->orbit_sensitivity;
-            cam->pitch -= dy * cam->orbit_sensitivity;
-
-            // Clamp pitch to avoid flipping
-            float max_pitch = 89.0f * DEG_TO_RAD;
-            if (cam->pitch > max_pitch) cam->pitch = max_pitch;
-            if (cam->pitch < -max_pitch) cam->pitch = -max_pitch;
-        }
+        // Clamp pitch to avoid flipping
+        float max_pitch = 89.0f * DEG_TO_RAD;
+        if (cam->pitch > max_pitch) cam->pitch = max_pitch;
+        if (cam->pitch < -max_pitch) cam->pitch = -max_pitch;
     }
 
-    // Scroll to zoom
+    // Scroll to move forward/back (zoom feel)
     if (input->scroll_y != 0) {
-        // Zoom factor: scroll up = zoom in (reduce distance)
-        float zoom_factor = 1.0f - input->scroll_y * 0.1f;
-        cam->distance *= zoom_factor;
+        Vec3 forward = camera_forward(cam);
+        float scroll_speed = 10.0f;  // 10 inches per scroll tick
+        cam->position = vec3_add(cam->position, vec3_scale(forward, input->scroll_y * scroll_speed));
+    }
 
-        // Clamp distance
-        if (cam->distance < cam->min_distance) cam->distance = cam->min_distance;
-        if (cam->distance > cam->max_distance) cam->distance = cam->max_distance;
+    // WASD movement - first-person style
+    bool w_held = input->keys[KEY_W];
+    bool s_held = input->keys[KEY_S];
+    bool a_held = input->keys[KEY_A];
+    bool d_held = input->keys[KEY_D];
+
+    if (w_held || s_held || a_held || d_held) {
+        float move_speed = cam->move_speed * dt;
+
+        Vec3 forward = camera_forward(cam);
+        Vec3 right = camera_right(cam);
+
+        // W/S: move forward/back in look direction
+        if (w_held) cam->position = vec3_add(cam->position, vec3_scale(forward, move_speed));
+        if (s_held) cam->position = vec3_add(cam->position, vec3_scale(forward, -move_speed));
+
+        // A/D: strafe left/right
+        if (a_held) cam->position = vec3_add(cam->position, vec3_scale(right, -move_speed));
+        if (d_held) cam->position = vec3_add(cam->position, vec3_scale(right, move_speed));
     }
 }
 
 Mat4 camera_view_matrix(OrbitCamera* cam) {
-    Vec3 pos = camera_position(cam);
-    return mat4_look_at(pos, cam->target, vec3_up());
+    Vec3 forward = camera_forward(cam);
+    Vec3 target = vec3_add(cam->position, forward);
+    return mat4_look_at(cam->position, target, vec3_up());
 }
 
 Mat4 camera_projection_matrix(OrbitCamera* cam, float aspect) {

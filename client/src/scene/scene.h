@@ -1,18 +1,32 @@
 /*
  * Scene Loader
- * Loads scene configuration files that define robots and their positions
+ * Loads YAML-like scene configuration files
  *
  * Scene File Format (.scene):
- *   # Comment lines start with #
- *   name <Scene Name>
- *   robot <file.mpd> <x> <y> <z> [rotation_y_degrees]
- *   cylinder <x> <z> <radius> <height> <r> <g> <b>
+ *   name: Scene Name
  *
- * Example:
- *   name Default Scene
- *   robot ClawbotIQ.mpd 0 0 0
- *   robot Ike.mpd 24 0 0 180
- *   cylinder -20 -15 2 7 0.9 0.2 0.2
+ *   physics:
+ *     friction: 0.8
+ *     cylinder_friction: 0.5
+ *     gravity: 386.1
+ *
+ *   robots:
+ *     - mpd: ClawbotIQ.mpd
+ *       position: [-20, 0, 0]
+ *       rotation: 0
+ *       iqpython: ClawbotIQ.iqpython
+ *       config: ClawbotIQ.config
+ *
+ *   cylinders:
+ *     - position: [-30, -20]
+ *       radius: 2
+ *       height: 7
+ *       color: [0.9, 0.2, 0.2]
+ *
+ * Notes:
+ *   - Robots without iqpython are static (no motor control)
+ *   - Only one robot can be "active" at a time (receives gamepad input)
+ *   - Use keys 1-4 to switch active robot
  */
 
 #ifndef SCENE_H
@@ -32,9 +46,12 @@ extern "C" {
 
 // Robot placement in scene
 typedef struct {
-    char mpd_file[SCENE_MAX_PATH];  // Path to MPD file (relative to robots dir)
-    float x, y, z;                   // Position in world units (inches)
-    float rotation_y;                // Rotation around Y axis (degrees)
+    char mpd_file[SCENE_MAX_PATH];      // Path to MPD file (relative to robots dir)
+    char iqpython_file[SCENE_MAX_PATH]; // Path to .iqpython file (optional, empty = static robot)
+    char config_file[SCENE_MAX_PATH];   // Path to .config file (optional)
+    float x, y, z;                       // Position in world units (inches)
+    float rotation_y;                    // Rotation around Y axis (degrees)
+    bool has_program;                    // True if iqpython_file is set
 } SceneRobot;
 
 // Cylinder object in scene (movable physics object)

@@ -113,6 +113,9 @@
 #define GRID_SIZE 12.0f     // 1 foot grid (12 inches)
 #define WALL_HEIGHT 4.0f    // 4 inch walls around field
 
+// UI Panel dimensions
+#define PANEL_WIDTH 220     // Left side panel width in pixels
+
 // Degrees to radians conversion
 #define DEG_TO_RAD_CONST (3.14159265359f / 180.0f)
 
@@ -1478,6 +1481,10 @@ int main(int argc, char** argv) {
     std::vector<RobotInstance> robots;
     uint32_t total_triangles = 0;
 
+    // Active robot tracking (which robot receives gamepad input)
+    // -1 = no active robot, 0-3 = robot index
+    int active_robot_index = -1;
+
     // Load scene file
     Scene scene;
     if (scene_load(scene_path, &scene)) {
@@ -1742,13 +1749,47 @@ int main(int argc, char** argv) {
 
         printf("\nScene loaded: %zu robots, %zu total parts, %zu unique meshes, %u triangles, %u cylinders\n",
                robots.size(), parts.size(), mesh_cache.size(), total_triangles, scene.cylinder_count);
+
+        // Auto-select first robot with a program
+        for (uint32_t i = 0; i < scene.robot_count; i++) {
+            if (scene.robots[i].has_program) {
+                active_robot_index = (int)i;
+                printf("Active robot: [%d] %s\n", active_robot_index, scene.robots[i].mpd_file);
+                break;
+            }
+        }
+        if (active_robot_index < 0) {
+            printf("No controllable robots found (no iqpython files assigned)\n");
+        }
     } else {
         printf("No scene loaded - running with empty scene\n");
     }
 
-    // Initialize gamepad (disabled for now - may cause issues on Linux)
+    // Initialize gamepad
+    // Disabled on WSL2 due to freezing issues, enabled on Windows and native Linux
     Gamepad gamepad;
     memset(&gamepad, 0, sizeof(gamepad));
+
+    bool is_wsl2 = false;
+#ifndef _WIN32
+    // Check if running in WSL2 by looking at /proc/version
+    FILE* version_file = fopen("/proc/version", "r");
+    if (version_file) {
+        char version_buf[256];
+        if (fgets(version_buf, sizeof(version_buf), version_file)) {
+            // WSL2 contains "microsoft" or "WSL" in version string
+            if (strstr(version_buf, "microsoft") || strstr(version_buf, "Microsoft") || strstr(version_buf, "WSL")) {
+                is_wsl2 = true;
+                printf("[Gamepad] WSL2 detected - gamepad disabled (known freeze issue)\n");
+            }
+        }
+        fclose(version_file);
+    }
+#endif
+
+    if (!is_wsl2) {
+        gamepad_init(&gamepad);
+    }
 
     // OpenGL setup
     glEnable(GL_DEPTH_TEST);
@@ -1768,9 +1809,9 @@ int main(int argc, char** argv) {
     bool show_bounding_boxes = false;
 
     printf("\nControls:\n");
-    printf("  Robot 1: WASD        - Drive (W/S forward/back, A/D turn)\n");
-    printf("  Robot 2: Arrow Keys  - Drive (Up/Down/Left/Right)\n");
-    printf("  Shift + Drive Keys   - Fine control (20%% speed)\n");
+    printf("  Gamepad              - Control robot via IQPython code\n");
+    printf("  1-4                  - Switch active robot\n");
+    printf("  WASD                 - Move camera\n");
     printf("  Middle Mouse + Drag  - Orbit camera\n");
     printf("  Shift + MMB + Drag   - Pan camera\n");
     printf("  Scroll Wheel         - Zoom in/out\n");
@@ -1802,8 +1843,15 @@ int main(int argc, char** argv) {
             fps_update_time = current_time;
         }
 
-        // Poll events
-        platform_poll_events(&platform, &input);
+        // Poll events (with gamepad event callback)
+        platform_poll_events_ex(&platform, &input,
+            [](void* sdl_event, void* user_data) {
+                Gamepad* gp = (Gamepad*)user_data;
+                gamepad_handle_event(gp, (SDL_Event*)sdl_event);
+            }, &gamepad);
+
+        // Update gamepad state
+        gamepad_update(&gamepad);
 
         // Handle keyboard input
         if (input.keys_pressed[KEY_ESCAPE]) {
@@ -1820,63 +1868,24 @@ int main(int argc, char** argv) {
             printf("Bounding boxes: %s\n", show_bounding_boxes ? "ON" : "OFF");
         }
 
-        // Robot driving controls (WASD for first robot, Arrow keys for second)
-        // Hold Shift for fine control (20% speed)
-        bool fine_control = input.keys[SDL_SCANCODE_LSHIFT] || input.keys[SDL_SCANCODE_RSHIFT];
-        float speed_multiplier = fine_control ? 0.2f : 1.0f;
-
-        // First robot: WASD
-        if (!robots.empty()) {
-            float left_pct = 0.0f;
-            float right_pct = 0.0f;
-
-            // W = forward, S = backward
-            if (input.keys[SDL_SCANCODE_W]) {
-                left_pct += 35.0f;
-                right_pct += 35.0f;
+        // Switch active robot with 1-4 keys
+        for (int key = SDL_SCANCODE_1; key <= SDL_SCANCODE_4; key++) {
+            if (input.keys_pressed[key]) {
+                int robot_idx = key - SDL_SCANCODE_1;
+                if (robot_idx < (int)scene.robot_count && scene.robots[robot_idx].has_program) {
+                    active_robot_index = robot_idx;
+                    printf("Active robot: [%d] %s\n", active_robot_index, scene.robots[robot_idx].mpd_file);
+                } else if (robot_idx < (int)scene.robot_count) {
+                    printf("Robot %d has no program (static)\n", robot_idx + 1);
+                } else {
+                    printf("Robot %d does not exist\n", robot_idx + 1);
+                }
             }
-            if (input.keys[SDL_SCANCODE_S]) {
-                left_pct -= 35.0f;
-                right_pct -= 35.0f;
-            }
-            // A = turn left (right faster than left)
-            if (input.keys[SDL_SCANCODE_A]) {
-                left_pct -= 20.0f;
-                right_pct += 20.0f;
-            }
-            // D = turn right (left faster than right)
-            if (input.keys[SDL_SCANCODE_D]) {
-                left_pct += 20.0f;
-                right_pct -= 20.0f;
-            }
-
-            drivetrain_set_motors(&robots[0].drivetrain, left_pct * speed_multiplier, right_pct * speed_multiplier);
         }
 
-        // Second robot: Arrow keys
-        if (robots.size() > 1) {
-            float left_pct = 0.0f;
-            float right_pct = 0.0f;
-
-            if (input.keys[SDL_SCANCODE_UP]) {
-                left_pct += 35.0f;
-                right_pct += 35.0f;
-            }
-            if (input.keys[SDL_SCANCODE_DOWN]) {
-                left_pct -= 35.0f;
-                right_pct -= 35.0f;
-            }
-            if (input.keys[SDL_SCANCODE_LEFT]) {
-                left_pct -= 20.0f;
-                right_pct += 20.0f;
-            }
-            if (input.keys[SDL_SCANCODE_RIGHT]) {
-                left_pct += 20.0f;
-                right_pct -= 20.0f;
-            }
-
-            drivetrain_set_motors(&robots[1].drivetrain, left_pct * speed_multiplier, right_pct * speed_multiplier);
-        }
+        // Motor control is now driven by IQPython via IPC
+        // TODO: Read motor states from PythonBridge and apply to drivetrain
+        // For now, motors are at rest (will be wired up in next step)
 
         // =====================================================================
         // Physics update order:
@@ -1954,12 +1963,17 @@ int main(int argc, char** argv) {
         // Update camera
         camera_update(&camera, &input, dt);
 
-        // Render
+        // Render - clear full screen first
         glViewport(0, 0, platform.width, platform.height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Get camera matrices
-        float aspect = (float)platform.width / (float)platform.height;
+        // Set 3D viewport to right of panel
+        int viewport_x = PANEL_WIDTH;
+        int viewport_width = platform.width - PANEL_WIDTH;
+        glViewport(viewport_x, 0, viewport_width, platform.height);
+
+        // Get camera matrices (use 3D viewport aspect ratio)
+        float aspect = (float)viewport_width / (float)platform.height;
         Mat4 view = camera_view_matrix(&camera);
         Mat4 projection = camera_projection_matrix(&camera, aspect);
 
@@ -2096,14 +2110,123 @@ int main(int argc, char** argv) {
             debug_end();
         }
 
-        // Render orientation gizmo in bottom-left corner
-        axis_gizmo_render(&axis_gizmo, &view, platform.width, platform.height);
+        // Render orientation gizmo in bottom-left of 3D viewport
+        axis_gizmo_render(&axis_gizmo, &view, viewport_width, platform.height);
 
-        // Render stats overlay
+        // Render stats overlay (top-right of 3D viewport)
         char stats[128];
         snprintf(stats, sizeof(stats), "FPS: %.0f  Parts: %zu  Tris: %u",
                  current_fps, parts.size(), total_triangles);
-        text_render_right(stats, 10.0f, 10.0f, platform.width, platform.height);
+        text_render_right(stats, 10.0f, 10.0f, viewport_width, platform.height);
+
+        // =========================================================
+        // Render UI Panel (left side) - switch to full screen viewport
+        // =========================================================
+        glViewport(0, 0, platform.width, platform.height);
+
+        // Draw panel background (dark gray)
+        glDisable(GL_DEPTH_TEST);
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(0, 0, PANEL_WIDTH, platform.height);
+        glClearColor(0.15f, 0.15f, 0.17f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);  // Restore default clear color
+        glDisable(GL_SCISSOR_TEST);
+
+        // Panel text rendering (font is 8px * 1.25 scale = 10px)
+        float panel_x = 8.0f;
+        float panel_y = 8.0f;
+        float line_height = 12.0f;
+
+        // Header
+        text_render("GAMEPAD", panel_x, panel_y, platform.width, platform.height);
+        panel_y += line_height + 4.0f;
+
+        // Connection status
+        char line[64];
+        if (gamepad.connected) {
+            text_render("Connected", panel_x, panel_y, platform.width, platform.height);
+        } else {
+            text_render("Not Connected", panel_x, panel_y, platform.width, platform.height);
+        }
+        panel_y += line_height;
+
+        if (gamepad.connected && gamepad.name[0]) {
+            // Truncate long controller names
+            char short_name[20];
+            strncpy(short_name, gamepad.name, 19);
+            short_name[19] = '\0';
+            text_render(short_name, panel_x, panel_y, platform.width, platform.height);
+            panel_y += line_height;
+        }
+        panel_y += 8.0f;  // spacing
+
+        // Axes section
+        text_render("Axes", panel_x, panel_y, platform.width, platform.height);
+        panel_y += line_height;
+
+        snprintf(line, sizeof(line), "A:%4d  B:%4d", gamepad.axes.a, gamepad.axes.b);
+        text_render(line, panel_x, panel_y, platform.width, platform.height);
+        panel_y += line_height;
+
+        snprintf(line, sizeof(line), "C:%4d  D:%4d", gamepad.axes.c, gamepad.axes.d);
+        text_render(line, panel_x, panel_y, platform.width, platform.height);
+        panel_y += line_height + 8.0f;
+
+        // Buttons section
+        text_render("Buttons", panel_x, panel_y, platform.width, platform.height);
+        panel_y += line_height;
+
+        snprintf(line, sizeof(line), "L: %s %s  R: %s %s",
+                 gamepad.buttons.l_up ? "U" : "-",
+                 gamepad.buttons.l_down ? "D" : "-",
+                 gamepad.buttons.r_up ? "U" : "-",
+                 gamepad.buttons.r_down ? "D" : "-");
+        text_render(line, panel_x, panel_y, platform.width, platform.height);
+        panel_y += line_height;
+
+        snprintf(line, sizeof(line), "E: %s %s  F: %s %s",
+                 gamepad.buttons.e_up ? "U" : "-",
+                 gamepad.buttons.e_down ? "D" : "-",
+                 gamepad.buttons.f_up ? "U" : "-",
+                 gamepad.buttons.f_down ? "D" : "-");
+        text_render(line, panel_x, panel_y, platform.width, platform.height);
+        panel_y += line_height + 12.0f;
+
+        // Active robot section
+        text_render("ROBOT", panel_x, panel_y, platform.width, platform.height);
+        panel_y += line_height + 4.0f;
+
+        if (active_robot_index >= 0 && active_robot_index < (int)scene.robot_count) {
+            const SceneRobot* active = &scene.robots[active_robot_index];
+            // Show robot name (strip .mpd extension)
+            char robot_name[32];
+            strncpy(robot_name, active->mpd_file, 31);
+            robot_name[31] = '\0';
+            char* ext = strrchr(robot_name, '.');
+            if (ext) *ext = '\0';
+
+            snprintf(line, sizeof(line), "[%d] %s", active_robot_index + 1, robot_name);
+            text_render(line, panel_x, panel_y, platform.width, platform.height);
+            panel_y += line_height;
+
+            if (active->has_program) {
+                text_render("Program: Active", panel_x, panel_y, platform.width, platform.height);
+            } else {
+                text_render("Program: None", panel_x, panel_y, platform.width, platform.height);
+            }
+            panel_y += line_height;
+        } else {
+            text_render("None selected", panel_x, panel_y, platform.width, platform.height);
+            panel_y += line_height;
+        }
+        panel_y += 4.0f;
+
+        // Robot list hint
+        snprintf(line, sizeof(line), "Press 1-%u to switch", scene.robot_count > 4 ? 4 : scene.robot_count);
+        text_render(line, panel_x, panel_y, platform.width, platform.height);
+
+        glEnable(GL_DEPTH_TEST);
 
         // Swap buffers
         platform_swap_buffers(&platform);

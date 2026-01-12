@@ -220,12 +220,12 @@ void text_destroy(void) {
     s_text_vao = s_text_vbo = s_text_shader = s_font_texture = 0;
 }
 
-void text_render(const char* str, float x, float y, int screen_width, int screen_height) {
+// Internal render function with scale parameter
+static void text_render_internal(const char* str, float x, float y, int screen_width, int screen_height, float scale) {
     if (!s_text_shader || !str || !*str) return;
 
     const float CHAR_WIDTH = 8.0f;
     const float CHAR_HEIGHT = 8.0f;
-    const float SCALE = 2.0f;  // 2x scale for readability
 
     // Build vertex data
     float vertices[256 * 6 * 4];  // Max 256 chars, 6 verts per char, 4 floats per vert
@@ -246,8 +246,8 @@ void text_render(const char* str, float x, float y, int screen_width, int screen
 
         float x0 = cx;
         float y0 = cy;
-        float x1 = cx + CHAR_WIDTH * SCALE;
-        float y1 = cy + CHAR_HEIGHT * SCALE;
+        float x1 = cx + CHAR_WIDTH * scale;
+        float y1 = cy + CHAR_HEIGHT * scale;
 
         // Two triangles per character
         float quad[6][4] = {
@@ -262,7 +262,7 @@ void text_render(const char* str, float x, float y, int screen_width, int screen
         memcpy(&vertices[vertex_count * 4], quad, sizeof(quad));
         vertex_count += 6;
 
-        cx += CHAR_WIDTH * SCALE;
+        cx += CHAR_WIDTH * scale;
     }
 
     if (vertex_count == 0) return;
@@ -291,10 +291,17 @@ void text_render(const char* str, float x, float y, int screen_width, int screen
     glEnable(GL_DEPTH_TEST);
 }
 
+// Default scale for panel text (smaller, cleaner look)
+static const float DEFAULT_SCALE = 1.25f;
+
+void text_render(const char* str, float x, float y, int screen_width, int screen_height) {
+    text_render_internal(str, x, y, screen_width, screen_height, DEFAULT_SCALE);
+}
+
 void text_render_right(const char* str, float margin, float y, int screen_width, int screen_height) {
     if (!str) return;
     int len = (int)strlen(str);
-    float text_width = len * 8.0f * 2.0f;  // 8 pixels per char * 2x scale
+    float text_width = len * 8.0f * DEFAULT_SCALE;
     float x = screen_width - text_width - margin;
-    text_render(str, x, y, screen_width, screen_height);
+    text_render_internal(str, x, y, screen_width, screen_height, DEFAULT_SCALE);
 }

@@ -384,16 +384,40 @@ def generate_yaml(doc: LDrawDocument, submodels: Dict[str, SubmodelInfo]) -> str
         lines.append("")
 
     # Motors section
+    # List each motor individually with a unique name
     lines.append("# Motor Configuration")
+    lines.append("# Each motor has a unique name: {SubmodelBaseName}_{N}")
     lines.append("motors:")
 
-    motor_submodels = [(name, info) for name, info in submodels.items() if info.motor_count > 0]
-    if motor_submodels:
-        for name, info in motor_submodels:
-            lines.append(f"  - submodel: {name}")
-            lines.append(f"    count: {info.motor_count}")
+    motor_count_by_submodel = {}  # Track count for unique naming
+    motor_entries = []
+
+    for name, info in submodels.items():
+        motor_parts = [p for p in info.parts if p.category == 'motor']
+        if motor_parts:
+            # Get base name without .ldr extension for cleaner naming
+            base_name = name.replace('.ldr', '').replace('.LDR', '')
+
+            for i, motor_part in enumerate(motor_parts, start=1):
+                motor_name = f"{base_name}_{i}" if len(motor_parts) > 1 or info.motor_count > 1 else f"{base_name}_1"
+                motor_entries.append({
+                    'name': motor_name,
+                    'submodel': name,
+                    'part': motor_part.part_number,
+                    'position': motor_part.position,
+                    'type': motor_part.type_string or 'motor:unknown',
+                })
+
+    if motor_entries:
+        for entry in motor_entries:
+            lines.append(f"  - name: {entry['name']}")
+            lines.append(f"    submodel: {entry['submodel']}")
+            lines.append(f"    part: {entry['part']}")
+            lines.append(f"    type: {entry['type']}")
+            lines.append(f"    position: [{entry['position'][0]}, {entry['position'][1]}, {entry['position'][2]}]")
             lines.append("    port: null  # 1-12")
             lines.append("    purpose: null  # drive | arm | intake | etc")
+            lines.append("")
     else:
         lines.append("  []  # No motor parts detected")
 

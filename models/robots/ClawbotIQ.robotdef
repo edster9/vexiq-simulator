@@ -217,23 +217,40 @@ submodels:
         position: [0.0, -16.0, -16.0]
 
 # Motor Configuration
+# Each motor has a unique name: {SubmodelBaseName}_{N}
 motors:
-  - submodel: LeftSideDrive.ldr
-    count: 1
+  - name: LeftSideDrive_1
+    submodel: LeftSideDrive.ldr
+    part: 228-2560
+    type: motor:smart_motor
+    position: [0.0, 0.0, 0.0]
     port: null  # 1-12
     purpose: null  # drive | arm | intake | etc
-  - submodel: RightSideDrive.ldr
-    count: 1
+
+  - name: RightSideDrive_1
+    submodel: RightSideDrive.ldr
+    part: 228-2560
+    type: motor:smart_motor
+    position: [0.0, 0.0, 0.0]
     port: null  # 1-12
     purpose: null  # drive | arm | intake | etc
-  - submodel: ShoulderMountA.ldr
-    count: 1
+
+  - name: ShoulderMountA_1
+    submodel: ShoulderMountA.ldr
+    part: 228-2560
+    type: motor:smart_motor
+    position: [-16.0, -48.0, 0.0]
     port: null  # 1-12
     purpose: null  # drive | arm | intake | etc
-  - submodel: Arm.ldr
-    count: 1
+
+  - name: Arm_1
+    submodel: Arm.ldr
+    part: 228-2560
+    type: motor:smart_motor
+    position: [48.0, -64.0, -48.0]
     port: null  # 1-12
     purpose: null  # drive | arm | intake | etc
+
 
 # Wheel Assemblies
 # Each assembly groups parts (hub, tire, etc.) that spin together
