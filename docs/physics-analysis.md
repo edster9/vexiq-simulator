@@ -248,6 +248,198 @@ if (penetration > 0) {
 
 ---
 
+## Incremental Bounding Box Strategy
+
+To properly tune the new physics, we need to simplify collision detection first and gradually add complexity. This allows us to isolate physics issues from collision detection issues.
+
+### Level 0: Single OBB Per Robot (Start Here)
+
+**Complexity**: Lowest
+**Use case**: Initial physics tuning
+
+One OBB around the entire robot. This gives us the simplest collision shape to debug physics behavior.
+
+```c
+// Single OBB enclosing entire robot
+OBB robot_obb;
+compute_robot_bounding_obb(robot, &robot_obb);
+
+// Collision check is simple
+if (obb_intersects_wall(&robot_obb, wall)) {
+    // Single push-out calculation
+}
+```
+
+**Advantages**:
+- Easiest to visualize and debug
+- Fastest collision detection
+- Physics issues are clearly visible (not masked by complex collision)
+- Good enough for basic wall/robot collisions
+
+**Disadvantages**:
+- Imprecise for irregular robot shapes
+- Can't detect which part of robot hit
+
+**Debug visualization**: Draw single box around robot (green = no collision, red = collision)
+
+---
+
+### Level 1: OBB Per Submodel
+
+**Complexity**: Medium
+**Use case**: After physics is tuned, for better collision accuracy
+
+One OBB per submodel (chassis, arm, claw, etc.). This is our current implementation.
+
+```c
+// OBB for each submodel
+for (int sm = 0; sm < robot->submodel_count; sm++) {
+    OBB world_obb;
+    transform_obb_to_world(&robot->submodel_obbs[sm], robot, &world_obb);
+
+    if (obb_intersects_wall(&world_obb, wall)) {
+        // Track which submodel hit
+        robot->submodel_collision_state[sm] = COLLISION_SUBMODEL;
+    }
+}
+```
+
+**Advantages**:
+- Better accuracy for articulated robots
+- Can identify which part hit (useful for game logic)
+- Still reasonably fast
+
+**Disadvantages**:
+- More complex collision response (multiple contact points)
+- Need to merge/average push directions
+
+**Debug visualization**: Draw box around each submodel (different colors per submodel)
+
+---
+
+### Level 2: OBB Per Part (In Active Collision Zone Only)
+
+**Complexity**: Highest
+**Use case**: Final polish, precision collision for game elements
+
+Full part-level collision, but only for submodels already detected as colliding (hierarchical).
+
+```c
+// First pass: submodel level (fast rejection)
+for (int sm = 0; sm < robot->submodel_count; sm++) {
+    OBB world_sm_obb;
+    transform_obb_to_world(&robot->submodel_obbs[sm], robot, &world_sm_obb);
+
+    if (!obb_intersects_wall(&world_sm_obb, wall)) continue;  // Skip if submodel doesn't hit
+
+    // Second pass: part level (only for colliding submodels)
+    for (int p = 0; p < robot->part_count; p++) {
+        if (robot->parts[p].submodel_index != sm) continue;
+
+        OBB world_part_obb;
+        transform_obb_to_world(&robot->part_obbs[p], robot, &world_part_obb);
+
+        if (obb_intersects_wall(&world_part_obb, wall)) {
+            // Precise collision at part level
+        }
+    }
+}
+```
+
+**Advantages**:
+- Most accurate collision detection
+- Can detect exactly which part hit (for damage, scoring, etc.)
+- Hierarchical approach keeps it efficient
+
+**Disadvantages**:
+- Most complex to implement and debug
+- Collision response needs careful handling of multiple contacts
+
+**Debug visualization**:
+- Level 1 boxes in wireframe
+- Level 2 (part) boxes solid for colliding parts only
+
+---
+
+### Implementation Plan
+
+#### Phase 1: Simplify to Level 0
+1. Add config flag: `COLLISION_LEVEL` (0, 1, or 2)
+2. Implement single-robot OBB calculation
+3. Modify collision functions to use single OBB when level = 0
+4. Add debug rendering for Level 0 OBB
+
+#### Phase 2: Tune Physics at Level 0
+1. Implement chosen physics option (A, B, or C)
+2. Test all collision scenarios with simple bounding box
+3. Tune damping, friction, restitution until smooth
+4. Document working parameter values
+
+#### Phase 3: Add Level 1 (Current System)
+1. Switch to `COLLISION_LEVEL = 1`
+2. Verify physics still works with submodel OBBs
+3. Adjust parameters if needed
+4. Add debug rendering for Level 1
+
+#### Phase 4: Add Level 2 (If Needed)
+1. Switch to `COLLISION_LEVEL = 2`
+2. Implement part-level collision within active submodels
+3. Verify and tune
+4. Add debug rendering for Level 2
+
+---
+
+### Debug Visualization Keys
+
+Add keyboard shortcuts for debugging:
+
+| Key | Action |
+|-----|--------|
+| `B` | Cycle collision level (0 → 1 → 2 → 0) |
+| `V` | Toggle bounding box visualization |
+| `Shift+V` | Toggle collision state colors |
+
+**Color scheme**:
+- Green wireframe: No collision
+- Yellow wireframe: Broad-phase hit (parent level)
+- Red solid: Actual collision detected
+- Blue: Wall/static object bounds
+
+---
+
+### Code Structure for Incremental Levels
+
+```c
+// In physics_config.h
+#define COLLISION_LEVEL 0  // 0=robot, 1=submodel, 2=part
+
+// In collision detection
+void detect_robot_wall_collision(RobotInstance* robot, ...) {
+    #if COLLISION_LEVEL == 0
+        // Single OBB for entire robot
+        OBB robot_obb = compute_full_robot_obb(robot);
+        if (obb_intersects_wall(&robot_obb, wall)) {
+            apply_collision_response(robot, &robot_obb, wall);
+        }
+    #elif COLLISION_LEVEL == 1
+        // Current submodel-based approach
+        for (int sm = 0; sm < robot->submodel_count; sm++) {
+            // ... existing code ...
+        }
+    #elif COLLISION_LEVEL == 2
+        // Hierarchical: submodel then part
+        for (int sm = 0; sm < robot->submodel_count; sm++) {
+            if (!submodel_intersects_wall(robot, sm, wall)) continue;
+            for (int p : submodel_parts[sm]) {
+                // ... part level ...
+            }
+        }
+    #endif
+}
+```
+
+---
+
 ## Implementation Details for Each Option
 
 ### Option A: Jolt Integration
